@@ -866,7 +866,7 @@ const PUBLIC_INDEX_MAX = 20000;
 // 503 while the database's schema_migrations ledger is behind this (see
 // schemaWriteGate, 02_http-and-creator-utils.js). Bump it in the same change
 // that adds a migration the code depends on.
-const REQUIRED_SCHEMA_VERSION = "0014";
+const REQUIRED_SCHEMA_VERSION = "0016";
 
 const D1_SCHEMA_MANIFEST = [
   {
@@ -1306,6 +1306,26 @@ const D1_SCHEMA_MANIFEST = [
   {
     migration: "0025", kind: "index", name: "idx_lists_owner_deleted",
     consequence: "Each signed-in Lists load reads the whole lists table to find the account's recently deleted lists. Slower, not broken.",
+  },
+  {
+    migration: "0026", kind: "index", name: "idx_accounts_key_hash",
+    consequence: "Each manifest and channel catalog request reads the whole accounts table. Slower, not broken.",
+  },
+  {
+    migration: "0027", kind: "index", name: "idx_lists_owner_account",
+    consequence: "Deleting an account reads the whole lists table. Slower, not broken.",
+  },
+  {
+    migration: "0027", kind: "index", name: "idx_channels_owner_account",
+    consequence: "Deleting an account reads the whole channels table. Slower, not broken.",
+  },
+  {
+    migration: "0029", kind: "index", name: "idx_creator_lists_username",
+    consequence: "Looking up one account's published lists reads the whole creator_lists table. Slower, not broken.",
+  },
+  {
+    migration: "0029", kind: "index", name: "idx_creator_lists_visibility",
+    consequence: "Filtering published lists by visibility reads the whole creator_lists table. Slower, not broken.",
   },
 ];
 
@@ -2405,3 +2425,9 @@ const UTILITY_CSS = `
 .u-ws-nowrap{white-space:nowrap !important}
 .u-ws-pre_wrap{white-space:pre-wrap !important}
 `;
+
+// Best-effort KV writes swallow their failure on purpose (the request must still
+// succeed), but a failure must leave a trace: say which key and why.
+function logIgnoredWrite(label, e) {
+  console.warn(`[ignored write] ${label}:`, e && e.message ? e.message : e);
+}

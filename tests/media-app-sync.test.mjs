@@ -3057,8 +3057,13 @@ describe("playback pings (Auto-track) and a connected Stremio", () => {
   async function account(name, { connect = true, pulling = true } = {}) {
     const state = { approved: true, library: [], episodes: {} };
     fakeServices(state);
-    const ctx = await setup(name);
+    const ctx = await setup(name, { FF_INSTALLS: "1" });
     await ctx.env.CONFIGS.put(`creatorsync:${name}`, JSON.stringify({ config: [], trackOwner: name, trackCreatorName: name, track: true }));
+    // A playback ping needs a link that proves its owner (audit SEC-02): the username link no
+    // longer does, so the account's own install link with the track scope sends them.
+    const link = await call(ctx.env, "/api/installs", { method: "POST", cookie: ctx.cookie, json: { track: true, entries: [{ id: "r1", name: "Popular", type: "movie", url: "tmdb:chart:popular" }] } });
+    assert.equal(link.status, 201, link.text);
+    ctx.linkBase = `/i/${link.body.token}`;
     if (connect) {
       await connectStremio(ctx, state);
       await pull(ctx.env);
@@ -3066,7 +3071,7 @@ describe("playback pings (Auto-track) and a connected Stremio", () => {
     }
     return ctx;
   }
-  const ping = (ctx, name, ua) => call(ctx.env, `/${name}/subtitles/movie/tt0468569.json`, { headers: { "user-agent": ua } });
+  const ping = (ctx, name, ua) => call(ctx.env, `${ctx.linkBase}/subtitles/movie/tt0468569.json`, { headers: { "user-agent": ua } });
   const diag = async (ctx, name) => JSON.parse((await ctx.env.CONFIGS.get(`creatortrack:${name}`)) || "{}");
   const recorded = async (ctx, name) => (await ctx.env.CONFIGS.get(`creatorsynctracking:${name}`)) !== null;
 

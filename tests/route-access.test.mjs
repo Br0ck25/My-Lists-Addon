@@ -143,6 +143,19 @@ describe("route access inventory", () => {
     assert.deepEqual(stale, [], "remove these from REGEX_ROUTES: no source matches them any more");
   });
 
+  // Audit TEST-04: the scans above find routes written as `path === "/x"`,
+  // `.startsWith` and `.match`. A route written another way (an array's
+  // .includes, a switch, a lookup table) is invisible to them. This one does
+  // not care how the route is matched: any string in the source that looks like
+  // an /admin/api/ or /api/ path must be in the manifest.
+  it("no /admin/api/ or /api/ path appears in the source without being listed, however it is matched", () => {
+    const found = new Set([...SOURCES.matchAll(/["'`](\/(?:admin\/)?api\/[A-Za-z0-9._\/-]*[A-Za-z0-9._-])["'`]/g)].map((m) => m[1]));
+    // Prefixes and path families that are decided elsewhere (PREFIXES above).
+    const KNOWN_ELSEWHERE = new Set(["/api/channel-", "/api/csp-report", "/api/imports", "/api/lists", "/api/scrobble"]);
+    const unlisted = [...found].filter((p) => !(p in MANIFEST) && !KNOWN_ELSEWHERE.has(p)).sort();
+    assert.deepEqual(unlisted, [], "each of these paths needs a line in tests/route-access.json (and admin ones must check isAdminRequest)");
+  });
+
   it("the scans see a route whichever quotes it is written with", () => {
     assert.deepEqual(scanExactRoutes(`if (path === "/api/double") {} if (path === '/api/single') {}`), ["/api/double", "/api/single"]);
     assert.deepEqual(scanExactRoutes(`if (url.pathname === '/api/p') {}`), ["/api/p"]);

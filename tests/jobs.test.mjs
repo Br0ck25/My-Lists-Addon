@@ -765,6 +765,16 @@ describe("P5-2: one-off jobs", () => {
     assert.equal((await t.tick()).sent, 0, "a failed job is not sent again");
   });
 
+  it("OPS-07: a periodic job that keeps failing backs off to hourly, one-off jobs do not", () => {
+    const sb = loadSourceFunctions("src/jobs/44_jobs-queue.js", "src/jobs/45_jobs-dispatcher.js");
+    const every = 4 * 60 * 1000;
+    const periodic = { periodic: true, everyMs: every };
+    assert.ok(sb.jobRowRetryMs(periodic, 3) <= every, "early failures retry within the job's own period");
+    assert.equal(sb.jobRowRetryMs(periodic, 40), 60 * 60 * 1000, "a long failure streak waits an hour");
+    assert.ok(sb.jobRowRetryMs(periodic, 9) <= every, "below the threshold nothing changes");
+    assert.equal(sb.jobRowRetryMs({ periodic: false, everyMs: 0 }, 40), sb.jobRetryDelaySec(40, {}) * 1000, "one-off jobs keep their own delay");
+  });
+
   it("a run that stopped part way is started again after its lease, and fails for good at the limit", async () => {
     const t = setup(() => ({}), { maxAttempts: 2 });
     const { id } = plain(await t.sb.createJob(t.env, "test.work", {}));
@@ -797,5 +807,54 @@ describe("P5-2: one-off jobs", () => {
     await assert.rejects(t.sb.createJob(t.env, "cron.episodes", {}), /not a job type that can be created/);
     await assert.rejects(t.sb.createJob(t.env, "no.such-type", {}), /not a job type that can be created/);
     assert.deepEqual(plain(await t.sb.createJob({}, "test.work", {})), { ok: false, reason: "noDatabase" });
+  });
+});
+
+// OPS-07: a job that keeps failing must be visible on the /admin front page,
+// not only inside Maintenance -> Check jobs.
+describe("OPS-07: the /admin front page names jobs that keep failing", () => {
+  async function ranEnv() {
+    const env = jobsEnv();
+    await runScheduledTick(env);
+    await drainQueue(env);
+    return env;
+  }
+
+  it("lists a job that failed 10 times in a row, with its error escaped", async () => {
+    const net = blockNetwork();
+    try {
+      const env = await ranEnv();
+      const cookie = await adminCookie(env);
+      const hostile = '<img src=x onerror="alert(1)"> boom';
+      env.DB._db.prepare("UPDATE jobs SET attempts = 10, last_error = ? WHERE type = ?").run(hostile, CRON_JOBS[0]);
+      env.DB._db.prepare("UPDATE jobs SET attempts = 9, last_error = 'almost' WHERE type = ?").run(CRON_JOBS[1]);
+      const page = await call(env, "/admin", { cookie });
+      assert.match(page.text, /id="failingJobsAlert"/);
+      assert.ok(page.text.includes(CRON_JOBS[0]), "the failing job is named");
+      assert.ok(page.text.includes("failed 10 times in a row"), "the streak is shown");
+      assert.ok(!page.text.includes(hostile), "the error text is never raw HTML");
+      assert.ok(page.text.includes("&lt;img src=x onerror=&quot;alert(1)&quot;&gt; boom"), "the error text is escaped");
+      assert.ok(!page.text.includes("almost"), "a streak under 10 is not listed");
+    } finally {
+      net.restore();
+    }
+  });
+
+  it("shows nothing extra when no job is failing", async () => {
+    const net = blockNetwork();
+    try {
+      const env = await ranEnv();
+      const cookie = await adminCookie(env);
+      env.DB._db.prepare("UPDATE jobs SET attempts = 9, last_error = 'almost' WHERE type = ?").run(CRON_JOBS[0]);
+      const page = await call(env, "/admin", { cookie });
+      assert.ok(!page.text.includes('id="failingJobsAlert"'));
+      // No jobs table at all: the front page still renders.
+      env.DB._db.exec("DROP TABLE jobs");
+      const none = await call(env, "/admin", { cookie });
+      assert.equal(none.status, 200);
+      assert.ok(!none.text.includes('id="failingJobsAlert"'));
+    } finally {
+      net.restore();
+    }
   });
 });

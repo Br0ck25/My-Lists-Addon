@@ -18,11 +18,11 @@ const save = (env, cookie, json) => call(env, "/admin/api/site-notice", { method
 const publicNotice = async (env) => (await call(env, "/api/site-notice")).body;
 
 describe("site notice: what visitors are told", () => {
-  it("is the shutdown message, on, until the admin changes it", async () => {
+  it("is the old shutdown message, but OFF, until the admin turns it on (the site is not shutting down)", async () => {
     const { env } = await setup();
     const n = await publicNotice(env);
     assert.equal(n.ok, true);
-    assert.equal(n.enabled, true);
+    assert.equal(n.enabled, false);
     assert.equal(n.title, "A Message About the Future of My Lists Addon");
     assert.match(n.body, /November 8, 2026/);
     assert.deepEqual([n.showDonate, n.showBackup, n.showGuide], [true, true, true]);
@@ -53,7 +53,7 @@ describe("site notice: what visitors are told", () => {
     const r = await save(env, cookie, { reset: true });
     assert.equal(r.body.ok, true);
     const n = await publicNotice(env);
-    assert.equal(n.enabled, true);
+    assert.equal(n.enabled, false);
     assert.equal(n.title, "A Message About the Future of My Lists Addon");
   });
 
@@ -69,10 +69,10 @@ describe("site notice: what visitors are told", () => {
 
   it("is edited by the admin only", async () => {
     const { env } = await setup();
-    const r = await call(env, "/admin/api/site-notice", { method: "POST", json: { enabled: false } });
+    const r = await call(env, "/admin/api/site-notice", { method: "POST", json: { enabled: true } });
     assert.equal(r.status, 401);
     assert.equal((await call(env, "/admin/api/site-notice")).status, 401);
-    assert.equal((await publicNotice(env)).enabled, true, "an unauthenticated POST must change nothing");
+    assert.equal((await publicNotice(env)).enabled, false, "an unauthenticated POST must change nothing");
   });
 
   it("has its own tab in the admin page", async () => {

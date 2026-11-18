@@ -113,6 +113,26 @@ describe("P5-7: token.refresh", () => {
     }
   });
 
+  // Audit API-02: Trakt sits behind Cloudflare, which answers a burst with a 403
+  // (error 1015) or 429. That says "slow down", not "this sign-in is dead".
+  for (const status of [403, 429]) {
+    it(`a ${status} on the refresh call is tried again later, not treated as a refusal`, async () => {
+      const trakt = stubTrakt({
+        issue: { access_token: "OLD", refresh_token: "R1", expires_in: 3 * 86400, created_at: nowSec() },
+        refresh: () => new Response("<html>error code: 1015</html>", { status }),
+      });
+      try {
+        const { env, cookie } = await setup("tr" + status);
+        await connectTrakt(env, cookie);
+        await tokenRefreshTick(env);
+        assert.ok(trakt.refreshes.length > 0, "the refresh was attempted");
+        assert.equal(conn(env).status, "ok");
+      } finally {
+        trakt.restore();
+      }
+    });
+  }
+
   it("a refused renewal asks to reconnect: a Stremio tile, a website banner, and connecting again clears it", async () => {
     const trakt = stubTrakt({ issue: { access_token: "OLD", refresh_token: "R1", expires_in: 3 * 86400, created_at: nowSec() } });
     try {

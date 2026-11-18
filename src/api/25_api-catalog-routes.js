@@ -587,6 +587,10 @@ function parseNuvioInstRowConfig(instRow, username, updatedAt) {
 }
 
 async function resolveNuvioTvTargetData(target, env) {
+  // A paired TV's secret token stands for its account (69_nuvio-tv-device-token.js).
+  const device = await resolveNuvioTvDeviceToken(env, target);
+  const deviceToken = device ? target : "";
+  if (device) target = device.username;
   let resolved = null;
   let installToken = target;
   let username = "";
@@ -595,7 +599,7 @@ async function resolveNuvioTvTargetData(target, env) {
   if (env && env.DB) {
     try {
       const acct = await env.DB.prepare(
-        "SELECT id, username, key_hash, created_at, last_active_at FROM accounts WHERE username = ? COLLATE NOCASE OR id = ? OR key_hash = ? LIMIT 1"
+        "SELECT id, username, key_hash, created_at, last_active_at FROM accounts WHERE username = ? OR id = ? OR key_hash = ? LIMIT 1"
       ).bind(target, target, target).first();
       if (acct) {
         username = acct.username;
@@ -654,18 +658,14 @@ async function resolveNuvioTvTargetData(target, env) {
         if (resolved && resolved.unresolved) resolved = null;
       } catch {}
     }
+    // Only an owner the link proves, as the channel lookups accept it
+    // (provenConfigOwnerUsername, 70_): an ownerId stamp must still be the same account.
     if (resolved && !username) {
-      if (resolved.trackOwner) {
-        username = resolved.trackOwner;
-      } else if (resolved.ownerId && env && env.DB) {
+      username = await provenConfigOwnerUsername(env, resolved);
+      if (username && env && env.DB) {
         try {
-          const oAcct = await env.DB.prepare("SELECT username, created_at, last_active_at FROM accounts WHERE id = ? LIMIT 1").bind(resolved.ownerId).first();
-          if (oAcct && oAcct.username) {
-            username = oAcct.username;
-            if (oAcct.last_active_at || oAcct.created_at) {
-              updatedAt = Math.max(updatedAt, oAcct.last_active_at || oAcct.created_at);
-            }
-          }
+          const oAcct = await env.DB.prepare("SELECT created_at, last_active_at FROM accounts WHERE username = ? LIMIT 1").bind(username).first();
+          if (oAcct && (oAcct.last_active_at || oAcct.created_at)) updatedAt = Math.max(updatedAt, oAcct.last_active_at || oAcct.created_at);
         } catch {}
       }
     }
@@ -694,7 +694,7 @@ async function resolveNuvioTvTargetData(target, env) {
     } catch {}
   }
 
-  return { resolved, installToken: installToken || username || target, username, updatedAt };
+  return { resolved, installToken: installToken || username || target, username, updatedAt, deviceToken };
 }
 
 async function handleNuvioTvCollectionsRoute(request, env, ctx, url, path) {
@@ -1027,7 +1027,8 @@ ${css}
 
     <div id="actionArea">
       <div id="signedInView" style="display:none;">
-        <button type="button" class="btn btn-primary" id="confirmLinkBtn">Link TV Now</button>
+        ${codeParam ? "" : '<p class="sub" id="noCodeHint">Open this page from the code shown on your TV.</p>'}
+        <button type="button" class="btn btn-primary" id="confirmLinkBtn"${codeParam ? "" : " disabled"}>Link TV Now</button>
         <a href="/" class="btn btn-secondary">Cancel</a>
       </div>
 
@@ -1132,11 +1133,30 @@ async function handleNuvioTvHistoryRemove(env, username, body) {
   return json({ ok: true, success: true }, 200, corsHeaders());
 }
 
-async function handleNuvioTvHistoryAdd(env, ctx, username, body) {
-  await ensureTrackingMigrated(env, username);
-  const syncKey = `creatorsynctracking:${username}`;
-  let blob = null;
+// The old path's write of one Nuvio TV play: the whole record to KV and D1, then the activity database.
+async function saveNuvioTvPlayLegacy(env, username, syncKey, blob) {
+  await env.CONFIGS.put(syncKey, JSON.stringify(blob));
   if (env.DB) {
+    try { await saveCreatorTrackingD1(env, username, blob, false); } catch {}
+  }
+  if (typeof recordActivityPlay === "function" && blob.watchHistory[0]) {
+    try {
+      const legacyEntry = typeof activityPlayFromLegacyEntry === "function"
+        ? activityPlayFromLegacyEntry(blob.watchHistory[0])
+        : blob.watchHistory[0];
+      await recordActivityPlay(env, username, legacyEntry, "nuvio-tv");
+    } catch {}
+  }
+}
+
+async function handleNuvioTvHistoryAdd(env, ctx, username, body) {
+  // FF_DIRECT_PLAY (41_direct-play.js, audit PERF-01): the record without its Watch
+  // History, so one play does not read and rewrite the whole history. Null = old path.
+  const direct = await directPlayLoad(env, username);
+  if (!direct) await ensureTrackingMigrated(env, username);
+  const syncKey = `creatorsynctracking:${username}`;
+  let blob = direct ? direct.blob : null;
+  if (!blob && env.DB) {
     try { blob = await readCreatorTrackingD1(env, username); } catch {}
   }
   if (!blob) {
@@ -1265,19 +1285,11 @@ async function handleNuvioTvHistoryAdd(env, ctx, username, body) {
   }
 
   blob.updatedAt = Date.now();
-  await env.CONFIGS.put(syncKey, JSON.stringify(blob));
-  if (env.DB) {
-    try { await saveCreatorTrackingD1(env, username, blob, false); } catch {}
+  if (direct) {
+    await directPlayCommit(env, username, direct, blob, "nuvio-tv");
+    return json({ ok: true, success: true }, 200, corsHeaders());
   }
-  if (typeof recordActivityPlay === "function" && blob.watchHistory[0]) {
-    try {
-      const legacyEntry = typeof activityPlayFromLegacyEntry === "function"
-        ? activityPlayFromLegacyEntry(blob.watchHistory[0])
-        : blob.watchHistory[0];
-      await recordActivityPlay(env, username, legacyEntry, "nuvio-tv");
-    } catch {}
-  }
-
+  await saveNuvioTvPlayLegacy(env, username, syncKey, blob);
   return json({ ok: true, success: true }, 200, corsHeaders());
 }
 
@@ -1294,6 +1306,11 @@ async function handleNuvioTvHistoryRoute(request, env, ctx, url, path) {
     return json({ ok: false, error: "Method not allowed." }, 405, corsHeaders());
   }
 
+  // Public and each call writes KV, D1 and the activity DB, so it is capped per address (SEC-06).
+  if (await consumeRateLimit(env, ctx, "tvhistory", clientIpKey(request), 120)) {
+    return json({ ok: false, error: "Too many requests. Please wait a moment." }, 429, { ...corsHeaders(), "Cache-Control": "no-store" });
+  }
+
   let body;
   try {
     body = await readJsonObject(request);
@@ -1306,10 +1323,13 @@ async function handleNuvioTvHistoryRoute(request, env, ctx, url, path) {
     return json({ ok: false, error: "Missing targetId." }, 400, corsHeaders());
   }
 
-  const { resolved, username } = await resolveNuvioTvTargetData(targetId, env);
-  if (!resolved || !username) {
-    return json({ ok: false, error: "Target not found or not paired." }, 404, corsHeaders());
+  // Only the secret the TV was given at pairing opens these routes: a username or
+  // an account id is public (audit SEC-01).
+  const device = await resolveNuvioTvDeviceToken(env, targetId);
+  if (!device) {
+    return json({ ok: false, error: "Target not found or not paired. Pair the TV again." }, 404, corsHeaders());
   }
+  const username = device.username;
 
   if (path === "/api/nuvio-tv/history/remove" || (body && body.action === "remove")) {
     return handleNuvioTvHistoryRemove(env, username, body);
@@ -1345,7 +1365,7 @@ async function handleNuvioTvSyncRoute(request, env, ctx, url, path) {
 
   if (target === "default") return buildNuvioTvSyncDefaultResponse(url, request);
 
-  const { resolved, installToken, username, updatedAt } = await resolveNuvioTvTargetData(target, env);
+  const { resolved, installToken, username, updatedAt, deviceToken } = await resolveNuvioTvTargetData(target, env);
   if (!resolved) {
     return json({ ok: false, error: "Target not found." }, 404, { ...corsHeaders(), "Cache-Control": "no-store" });
   }
@@ -1382,7 +1402,9 @@ async function handleNuvioTvSyncRoute(request, env, ctx, url, path) {
   }
   const channels = formatNuvioUserChannels(userChannelsRaw);
 
-  const manifestUrl = username
+  const manifestUrl = deviceToken
+    ? `${url.origin}/i/${deviceToken}/tv/manifest.json`
+    : username
     ? `${url.origin}/${username}/tv/manifest.json`
     : (typeof isV2InstallParam === "function" && isV2InstallParam(installToken))
       ? `${url.origin}/${installToken}/tv/manifest.json`
@@ -1390,7 +1412,7 @@ async function handleNuvioTvSyncRoute(request, env, ctx, url, path) {
         ? `${url.origin}/i/${installToken}/tv/manifest.json`
         : `${url.origin}/${installToken}/tv/manifest.json`;
 
-  const collectionsUrl = `${url.origin}/api/nuvio-tv/collections/${username || target}`;
+  const collectionsUrl = `${url.origin}/api/nuvio-tv/collections/${deviceToken || username || target}`;
 
   const randomizeItemsDaily = Boolean(resolved.randomizeItemsDaily || resolved.shuffleItems);
   const entries = Array.isArray(resolved.entries) ? resolved.entries : (Array.isArray(resolved.lists) ? resolved.lists : []);
@@ -1467,7 +1489,7 @@ async function handleFetch(request, env, ctx) {
       request.session = sessionAuth.session;
     }
 
-    const nuvioTvSyncResponse = await handleNuvioTvSyncRoute(request, env, ctx, url, path);
+    const nuvioTvSyncResponse = (await adminApiGate(request, env, path)) || await handleNuvioTvSyncRoute(request, env, ctx, url, path);
     if (nuvioTvSyncResponse) return nuvioTvSyncResponse;
     const installsResponse = await handleInstallsApi(request, env, url, path);
     if (installsResponse) return installsResponse;

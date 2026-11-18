@@ -1298,7 +1298,7 @@ async function apiTmdbMyLists(request, env, url) {
       const body = await readJsonObject(request);
       if (body.sessionId) sessionId = body.sessionId;
       if (body.accountId) accountId = body.accountId;
-      if (body.tmdbKey) manualKey = body.tmdbKey;
+      if (body.tmdbKey && typeof body.tmdbKey === "string") manualKey = body.tmdbKey;
     } catch {}
   }
 

@@ -41,11 +41,11 @@ async function resolveCreatorSyncConfig(username, env, { isTvLauncher = false } 
             const mainParsed = mainRaw ? JSON.parse(mainRaw) : null;
             if (mainParsed && typeof mainParsed === "object") settingsSource = mainParsed;
           } catch {}
-          const tvList = Array.isArray(tvParsed.config)
+          const tvList = (Array.isArray(tvParsed.config)
             ? tvParsed.config
             : (Array.isArray(tvParsed.entries)
               ? tvParsed.entries
-              : (Array.isArray(tvParsed.lists) ? tvParsed.lists : []));
+              : (Array.isArray(tvParsed.lists) ? tvParsed.lists : []))).filter((e) => e && typeof e === "object");
           return {
             entries: tvList,
             lists: tvList,
@@ -69,11 +69,12 @@ async function resolveCreatorSyncConfig(username, env, { isTvLauncher = false } 
     if (!raw) return null;
     const parsed = JSON.parse(raw);
     if (!parsed) return null;
-    const list = Array.isArray(parsed.config)
+    // An entry that is not an object (a stored null) is skipped, not fatal.
+    const list = (Array.isArray(parsed.config)
       ? parsed.config
       : (Array.isArray(parsed.entries)
         ? parsed.entries
-        : (Array.isArray(parsed.lists) ? parsed.lists : []));
+        : (Array.isArray(parsed.lists) ? parsed.lists : []))).filter((e) => e && typeof e === "object");
     return {
       entries: list,
       lists: list,
@@ -106,10 +107,11 @@ async function resolveConfig(configParam, env, { withTracking = false, isTvLaunc
   if (cleanParam === "nuvio-default" || cleanParam === "default") {
     return typeof buildNuvioTvDefaultConfig === "function" ? buildNuvioTvDefaultConfig() : { entries: [], lists: [], randomizeItemsDaily: true, shuffleItems: true };
   }
+  // A v2 install link, /i/{token}/... (P3a-8, 27_installs.js). Checked first: its token is
+  // not a username, and a username is not a secret (audit SEC-02).
+  if (isV2InstallParam(configParam)) return resolveV2InstallConfig(configParam, env, { withTracking, isTvLauncher });
   const creatorSync = await resolveCreatorSyncConfig(cleanParam, env, { isTvLauncher });
-  if (creatorSync) return creatorSync;
-  // A v2 install link, /i/{token}/... (P3a-8, 27_installs.js).
-  if (isV2InstallParam(configParam)) return resolveV2InstallConfig(configParam, env, { withTracking });
+  if (creatorSync) return legacyUsernameOwnerLinks(env) ? creatorSync : withoutOwnerProof(creatorSync);
   if (configParam.length <= SHORT_ID_LENGTH && env && env.CONFIGS) {
     const stored = (await env.CONFIGS.get(savedConfigKey(configParam)))
       || (await env.CONFIGS.get(configParam));
@@ -442,12 +444,12 @@ const CATALOG_SOURCES = [
   {
     name: "trakt-watchlist", provider: "trakt", kind: "personal", apiUse: "trakt",
     match: (s) => isSourceSentinel(s, "trakt:watchlist") || /^https?:\/\/(www\.|app\.)?trakt\.tv\/users\/[^/]+\/watchlist\/?(?:[?#].*)?$/i.test(s),
-    fetchPage: (ref, { entry, skip, keys }) => fetchTraktWatchlist(entry, skip, catalogTraktKey(keys), keys.traktAccessToken || "", keys.env, keys.ctx),
+    fetchPage: (ref, { entry, skip, keys }) => traktWindowedPage(skip, (s) => fetchTraktWatchlist(entry, s, catalogTraktKey(keys), keys.traktAccessToken || "", keys.env, keys.ctx), { env: keys.env, id: ["watchlist", entry.type, keys.traktAccessToken || ""].join("|") }),
   },
   {
     name: "trakt-history", provider: "trakt", kind: "personal", apiUse: "trakt",
     match: (s) => isSourceSentinel(s, "trakt:history") || /^https?:\/\/(www\.|app\.)?trakt\.tv\/users\/[^/]+\/history\/?(?:[?#].*)?$/i.test(s),
-    fetchPage: (ref, { entry, skip, keys }) => fetchTraktHistory(entry, skip, catalogTraktKey(keys), keys.traktAccessToken || "", keys.env, keys.ctx),
+    fetchPage: (ref, { entry, skip, keys }) => traktWindowedPage(skip, (s) => fetchTraktHistory(entry, s, catalogTraktKey(keys), keys.traktAccessToken || "", keys.env, keys.ctx), { env: keys.env, id: ["history", entry.type, keys.traktAccessToken || ""].join("|") }),
   },
   {
     name: "trakt-airing-next", provider: "trakt", kind: "personal", apiUse: "trakt",
@@ -528,7 +530,7 @@ const CATALOG_SOURCES = [
     snapshot: {},
     match: (s) => s.startsWith("trakt:chart:"),
     arg: sourceArgAfter("trakt:chart:"),
-    fetchPage: (ref, { entry, skip, keys }) => fetchTraktChart(entry, skip, catalogTraktKey(keys), ref.arg, keys.env, keys.ctx),
+    fetchPage: (ref, { entry, skip, keys }) => traktWindowedPage(skip, (s) => fetchTraktChart(entry, s, catalogTraktKey(keys), ref.arg, keys.env, keys.ctx), { env: keys.env, id: ["chart", ref.arg, entry.type].join("|") }),
   },
   {
     name: "simkl-chart", provider: "simkl", kind: "chart", apiUse: "simkl",
@@ -585,7 +587,7 @@ const CATALOG_SOURCES = [
   {
     name: "trakt", provider: "trakt", kind: "list", apiUse: "trakt",
     match: (s) => /^https?:\/\/(www\.|app\.)?trakt\.tv\//i.test(s),
-    fetchPage: (ref, { entry, skip, keys }) => fetchTrakt(entry, skip, catalogTraktKey(keys), keys.traktAccessToken || "", keys.env, keys.ctx),
+    fetchPage: (ref, { entry, skip, keys }) => traktWindowedPage(skip, (s) => fetchTrakt(entry, s, catalogTraktKey(keys), keys.traktAccessToken || "", keys.env, keys.ctx), { env: keys.env, id: ["list", entry.url, entry.type, keys.traktAccessToken || ""].join("|") }),
   },
   {
     name: "tmdb", provider: "tmdb", kind: "list", apiUse: "tmdb",

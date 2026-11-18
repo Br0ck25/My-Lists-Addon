@@ -60,6 +60,21 @@ The owner decided to release the new version **one phase at a time, straight to 
 
 ---
 
+## My Channels play on a paired Nuvio TV (built 2026-11-16, stamp f6e57cc1ef; prepared, not deployed)
+
+Owner report (2026-11-16): the Nuvio TV Launcher listed no programmes for the account's own channels (Avatar, Saturday Classics Cartoons, The Complete Arrowverse Timeline). Since pairing hands a TV a secret install token (SEC-01/02), the TV asks for schedules and channel catalogs with that token. Those two routes found the channel's account by comparing the token to `installs.token_hash`, which holds only its hash, so they found no account: every channel came back `missing` and its catalog empty. By username they worked, and the sync answer itself already listed the channels.
+- One lookup (`channelOwnerUsername`, `70_stremio-routes.js`) now also recognises a secret install token by its hash, in both its forms (`/i/<token>/` and the bare token), and only while the install is not revoked. It serves `GET /api/nuvio-tv/schedules/<token>`, `/api/nuvio-tv/schedule/<token>/<id>` and `/i/<token>/tv/catalog/<type>/channel_<id>.json`.
+- The channels do not need to be in the account's catalogs: the launcher reads them from My Channels through the sync answer.
+- A plain addon link (`/<id>/manifest.json`) given to the launcher without pairing counts as the account on all three routes when the link proves it, the way the manifest route accepts it: saved while signed in (the `ownerId` stamp, checked against the account's creation time so a reused id does not count) or carrying the account's key or owner stamp. Before, the sync answer found the account by such a link but the schedules and the channel catalog did not. A link saved signed out proves no account and still gets the 28 presets: anyone can make a link that only names an account, so it cannot read that account's channels. The owner's link `i872xonFrpCI` is such a link (checked on production 2026-11-16): save a new link while signed in, or pair the TV.
+- Test: `tests/nuvio-tv-device-channels.test.mjs`.
+
+## Finale badges back on shows in the middle of their season (built 2026-11-15, stamp cdbd71e3dd; prepared, not deployed)
+
+Owner report (2026-11-15): the "Finale: <date>" badge was missing on the Lists tab for FBI, Tulsa King, Dexter: Resurrection and others. Since `FF_SHOW_SCHEDULE` went on (2026-10-04), Continue Watching and Airing Next come from `show_schedule`, and `show.refresh` only knew the finale's date when the finale was the next or the last aired episode. TMDB's show answer gives a season's episode count but no dates.
+- `show.refresh` now reads the season's episode list when an episode between the premiere and the finale is next (one more TMDB call for those shows only, as the older path did), and stores the finale's date. A failed read leaves no date, never a wrong one. Badges come back as each show's next refresh runs (within about 6 hours, no action needed).
+- Continue Watching now carries the air time of the scheduled next episode itself; it used to borrow it from Airing Next, so a show removed there showed the date without the hour.
+- Test: `tests/show-finale-date.test.mjs`.
+
 ## Nuvio pulls only what changed, stores positions, mirrors deletions (built 2026-11-09, stamp ; prepared, not deployed)
 
 From the Nuvio API document (v1.3). Before this, every Nuvio pull re-read the whole watch history and all progress, and read progress with a paging header the document does not describe. Now:
@@ -2706,3 +2721,75 @@ New test in `tests/worker.test.mjs` ("passes a pick's runtime on"): a movie and 
 
 ### Checked
 `tests/nuvio-tv-sync.test.mjs` covers storing, replacing by show, ignoring a start, clearing on finish, an unknown box and bad input.
+
+## 2026-11-10 — Independent audit fixes: account deletion, bad list entries, KV outages, indexes (build `0b1c40b88d`, prepared; not deployed)
+
+Plan and evidence: `docs/audit-2026-11-10/` (finding ids in brackets). Not fixed in this release: SEC-01, SEC-02, PERF-01, API-04, PROD-02, UI-02 to UI-09 (see the notes under Owner steps).
+
+- **Fixed (DB-01, SEC-04, TEST-03): deleting an account now also removes its resume positions, Nuvio "removed plays" and search-index rows.** The next account that is handed the same id no longer inherits them. The purge test checks all of these and saved presets.
+- **Fixed (BUG-01): one empty entry in a synced list no longer breaks the whole install link.** The save drops entries that are not objects and the read skips any already stored.
+- **Fixed (DB-02): saving liked/hidden lists can no longer cut them short.** Rows are added first and only stale ones removed last; a failed write now answers an error instead of "ok".
+- **Fixed (API-01): during a storage outage the manifest answers 503 and catalog/meta rows answer empty, with CORS headers and no internal error text.**
+- **Fixed (API-02): a 403 on a Trakt/MDBList token refresh no longer flips a healthy connection to "Reconnect".** Only 400 and 401 do.
+- **Fixed (API-05, part): a catalog `skip` is a whole number from 0 to 9,900.** No limiter was added for catalog rows (see below).
+- **Fixed (PERF-03, client part): identical preview requests made at once share one call.**
+- **Fixed (DB-03): migration `0026` indexes `accounts(key_hash)`; the manifest lookup also drops a redundant `COLLATE NOCASE`** that stopped SQLite using its indexes together.
+- **Fixed (OPS-01): the build refuses a `.js` file under `src/` that it would not pick up.** (OPS-02, OPS-03, TEST-07): the last line of `verify.sh` says when the browser tests were skipped; `verify.sh` turns on the pre-commit hook if missing; generated files are git-ignored.
+- **Fixed (PROD-01): pasting a Trakt link no longer switches a new catalog to Shows.** (UI-01): a failed title or public-list search says it could not load instead of "No titles found." (PROD-03): the leftover MDBList debug log is gone. (PROD-04): README says "every few minutes".
+- **Docs (OPS-04, OPS-05, OPS-08):** the deploy checklist no longer tells the owner to run `wrangler d1 export` on `my-lists-db`; STAGING.md says staging does not run `FF_V2_LISTS_ONLY`; SELF-HOSTING links and the staging setup steps are corrected.
+- **Tests (TEST-01, TEST-02, TEST-04, TEST-05, TEST-06):** forged, edited and expired fallback admin cookies are refused (both mutations now fail the suite); the route-access test fails on any unlisted `/admin/api/` or `/api/` path string however it is matched; the air-time test no longer depends on time zone; the wall-clock budgets in `load-performance.test.mjs` run only with `MLA_PERF=1`.
+
+### Owner steps
+1. **Apply `migrations/0026_accounts_key_hash_index.sql`** in `my-lists-db`'s Console. Safe before or after pasting the Worker; without it nothing breaks, manifests are just slower.
+2. Paste the new Worker.
+
+### Checked
+`bash verify.sh -q` passes with the browser step skipped (Playwright cannot be imported on the machine used); CI runs it. Each fix has a test that failed first for the reason in the audit.
+
+## 2026-11-10 — Audit fixes, round 2: a username is no longer a password; Trakt paging; limits (build `87b203883c`, prepared; not deployed)
+
+Owner decisions of 2026-11-10 on the open items of `docs/audit-2026-11-10/`. Read the first item before deploying.
+
+- **Fixed (SEC-01, SEC-02): a username no longer proves who is asking.** Pairing a Nuvio TV now makes an install link of its own named *Nuvio TV* (scope `tv`, shown under Install links, at most five per account). The TV is given its secret token as its id; its manifest address is `/i/<token>/tv/manifest.json` and its sync address `/api/nuvio-tv/sync/<token>`. Only that token opens `POST /api/nuvio-tv/history` and `/history/remove`, so a stranger who knows a username or an account number can no longer add or erase someone's watch history. A bare `/<username>/...` link now serves the account's public rows only: a Watch History, Continue Watching or Watchlist row on it comes back empty, and its playback ping records nothing. Full explanation: `docs/OPERATIONS.md` section 34.
+- **Fixed (SEC-04): deleting an account deletes its support threads** (D1 row and KV copy); a reset keeps them.
+- **Fixed (PROD-02): "+ New Catalog" refuses a link that is not a supported list source** and says why, instead of saving a dead row. `/api/preview` takes `validateOnly`.
+- **Fixed (API-04): Trakt rows continue where the app is.** Lists, watchlist, history and charts walk Trakt's pages (at most five per request, each cached on its own), drop titles already seen and return the window asked for, so `skip=<titles held>` no longer returns the same titles again.
+- **Fixed (API-05): catalog pages after the first share 120 a minute per address** (a refused page is a 429 with CORS, no-store and Retry-After); the first page is free. **(PERF-03) the first page of a public TMDB or Trakt chart is not charged to the preview budget**, so the home page no longer spends 30 units a visit; the preview `skip` is capped like catalog rows.
+- **Changed (D-36): the public site is not shutting down.** The default Site Notice is off, and the FAQ and SELF-HOSTING give no shutdown date. Staging now runs `FF_V2_LISTS_ONLY` like production.
+- **Not fixed (PERF-01):** still blocked on the owner's call in `docs/HANDOFF.md`; the one small change tried saved nothing and was reverted.
+
+### Owner steps
+1. **Turn the shutdown notice off in `/admin` → Management & Tools → Site Notice if one was ever saved there.** Only the default changed; a saved notice stays as saved.
+2. **Tell people who installed their username link** (`mylistsaddon.com/<username>/manifest.json`) in Stremio, Nuvio or Wako to install an address from *Install links* instead, or their private shelves stay empty. If that is too sudden, set the Worker variable `LEGACY_USERNAME_OWNER_LINKS` to `1` for now (it reopens the hole for everyone; remove it once people have moved).
+3. **Re-pair each Nuvio TV** that was paired before this release: its rows still load, but its watch history reports are refused until it is paired again.
+4. Paste the new Worker. Migration `0026` from the earlier entry is still to be applied.
+
+### Checked
+`bash verify.sh -q` passes with the browser step skipped (Playwright cannot be imported on the machine used). Tests that relied on the username link now use the owner's own install link; two support-history tests and one providers test were changed to the new rules and say why.
+
+## 2026-11-14 — "Removed from Airing Next" is back in Settings; unused code removed (build `85f8054678`, prepared; not deployed)
+
+- **Restored: Settings → Catalog & Display → Removed from Airing Next.** It lists every show taken off Airing Next with the x on its poster, each with a Restore button. It appears only when at least one show is removed. Before this, a show removed by mistake came back only once another episode of it was watched. The removal message now reads *Removed [show] from Airing Next. Restore it from Settings.*
+- **Removed (CQ-04): code nothing called.** `buildNuvioTvDefaultPreset`, `reconcileAccounts`, `resolveMedia` and the page's copy of `mergeNuvioCollections` (the server's copy is the one in use). Nothing users see changes.
+
+### Owner steps
+1. Paste the new Worker.
+2. To check: remove a show from Airing Next with the x, open Settings → Catalog & Display, and press Restore beside it.
+
+### Checked
+`bash verify.sh -q` passes with the browser step skipped (Playwright cannot be imported by the test runner on this machine). Separately, the panel was opened in a real browser against the dev server, in light, dark and phone width, and Restore was clicked: the show came back, the success message appeared, and the panel hid itself when nothing was left.
+
+## 2026-11-14 — Recording a play no longer re-reads the whole watch history (PERF-01) (build `a294a06f44`, prepared; not deployed)
+
+- **Fixed (PERF-01), behind a new switch `FF_DIRECT_PLAY`.** A play from Plex, Jellyfin or Emby, or from the Stremio/Nuvio playback ping, used to rebuild the account's whole history and compare it with what was stored: about 300 database calls at 5,000 plays, and over Cloudflare's 1,000-call limit near 18,000 (four accounts have more than 10,000). With the switch on, an account whose history has been copied records the play on its own, at a cost that does not depend on its history: 200 and 3,200 plays make the same number of calls. The old way still runs, unchanged, when the switch is off or unset (the default, and what self-hosters get), for an account not yet copied to the activity database, and for an account whose settings were never stored.
+- **Kept, with tests that run on both ways:** the next episode and "fully watched" decision (including taking a finished show off the finished list when a newer episode is played), the first Continue Watching entry of a show seen for the first time, and the updated stamp other open tabs poll.
+- **One small difference:** a show's first play now also counts the account as a watcher of that show (`show_schedule.watcher_count`), as `recordActivityPlay` was written to do; on the old way the history rebuild got there first and the count was left to the schedule job's recount.
+
+### Owner steps
+1. Paste the new Worker.
+2. Turn it on: in the Cloudflare dashboard add the variable `FF_DIRECT_PLAY` = `1` to the Worker. To turn it off again, set it to `0` or delete it; no deploy is needed and the old way takes over on the next play.
+3. To check: play something, then watch **Continue Watching** and **Watch History** on the website.
+
+### Checked
+`tests/perf-direct-play.test.mjs` (34 tests). The cost test failed first (2 full history reads per play); the behaviour tests pin the old way's results and run on both ways. `bash verify.sh -q`: see the commit.
+

@@ -374,6 +374,13 @@
       <p class="u-m-0_0_10px u-c-v_muted u-fs-v_font_size_sm">Hide specific lists from My Lists, Airing Next, and Simkl Airing Next. A hidden list is still tracked and updated normally underneath -- only its display is suppressed, and it can be shown again here at any time.</p>
       <div id="hiddenListsSettingsSection"></div>
     </div>
+
+    <!-- Removed from Airing Next: filled and shown by renderRemovedAiringNextSettingsSection only when a show is removed -->
+    <div class="panel u-mt-12px" style="display:none;">
+      <h2 class="panel-title">Removed from Airing Next</h2>
+      <p class="u-m-0_0_10px u-c-v_muted u-fs-v_font_size_sm">Shows you removed from Airing Next with the x on their poster. A show comes back by itself when you watch another episode, or restore it here now.</p>
+      <div id="removedAiringNextSettingsSection"></div>
+    </div>
   </div>
 
   <!-- Subpanel 3: Tracking & Scrobble -->

@@ -197,7 +197,8 @@ async function stremioCatalogRow(request, env, ctx, url, m) {
   const browseRow = browseKey && typeof STREAMING_ROW_BY_CHART_KEY !== "undefined" ? STREAMING_ROW_BY_CHART_KEY[browseKey] : null;
   if (browseRow && browseRow.additional && !browseRow.kinds[type]) return jsonPublic({ metas: [] }, 200, CATALOG_NO_CACHE);
   const extra = Object.fromEntries(new URLSearchParams(extraStr || ""));
-  const skip = parseInt(extra.skip, 10) || 0;
+  // A whole number from 0 to 9,900 (a row page is 100 titles and TMDB stops at page 500, 20 titles each): a negative or enormous skip is not forwarded to a provider (audit API-05).
+  const skip = Math.min(Math.max(parseInt(extra.skip, 10) || 0, 0), 9900);
   const searchQuery = extra.search ? safeDecodeURIComponent(extra.search).trim() : "";
 
   // Dedicated search catalogs for Stremio and Nuvio
@@ -329,6 +330,8 @@ async function stremioCatalogRow(request, env, ctx, url, m) {
       }, 200, { "Cache-Control": "no-cache, no-store, must-revalidate, max-age=0" });
     }
   }
+  const skipLimited = await catalogSkipLimitResponse(request, env, ctx, skip);
+  if (skipLimited) return skipLimited;
   return stremioCatalogRowFetch(env, ctx, { url, config, type, id, skip, searchQuery, resolvedConfig, entries, tmdbKey, mdblistKey, mdblistAccessToken, traktKey, traktAccessToken, simklKey, simklAccessToken, shuffleItems, trackCreatorName, trackOwner, region, hideNonDigitalReleases, adultContentFilter, dedupeAcrossLists, betterPosters, showBadgesStremio, showBadgesStremioAiringNext, showBadgesStremioContinueWatching, showBadgesStremioCatalogs, showBadgesStremioWatchlist, entryIndex, entry, isAutoTrack, isUserPersonal, isLiveCustomList });
 }
 
@@ -516,7 +519,8 @@ async function stremioMetaItem(env, ctx, url, m) {
       });
       return jsonPublic({ meta: meta || null });
     } catch (err) {
-      return jsonPublic({ meta: null, error: safeErrorMessage(err) }, 200, CATALOG_NO_CACHE);
+      console.error("[Meta] failed:", err); // the storage text stays out of the answer
+      return jsonPublic({ meta: null }, 200, CATALOG_NO_CACHE);
     }
   }
 
@@ -544,33 +548,67 @@ async function stremioMetaItem(env, ctx, url, m) {
         { "Cache-Control": "public, max-age=86400, stale-while-revalidate=604800" }
       );
     } catch (err) {
-      return jsonPublic({ meta: null, error: safeErrorMessage(err) }, 200, CATALOG_NO_CACHE);
+      console.error("[Meta] failed:", err); // the storage text stays out of the answer
+      return jsonPublic({ meta: null }, 200, CATALOG_NO_CACHE);
     }
   }
 
   return jsonPublic({ meta: null });
 }
 
+// The account whose My Channels an address reads: a username, an account id or
+// key hash, a legacy install id, or a secret install token. A token is stored
+// only as its hash, so it is looked up by its hash and only while the install is
+// live. Comparing the raw address to token_hash never matched, so a paired Nuvio TV
+// (whose address is such a token) got no schedule and an empty channel catalog
+// (owner report, 2026-11-16). "" when none.
+async function channelOwnerUsername(config, env) {
+  if (!config || !env || !env.DB) return "";
+  try {
+    const acct = await env.DB.prepare(
+      "SELECT username FROM accounts WHERE username = ? OR id = ? OR key_hash = ? LIMIT 1"
+    ).bind(config, config, config).first();
+    if (acct) return acct.username;
+    // The catalog routes see /i/<token>/ as "i~<token>" (v2InstallPath); the TV routes see the bare token.
+    const token = isV2InstallParam(config) ? config.slice(INSTALL_TOKEN_PARAM_PREFIX.length) : config;
+    const tokenHash = isWellFormedInstallToken(token) ? await installTokenHash(token) : null;
+    const instRow = await env.DB.prepare(
+      "SELECT account_id FROM installs WHERE legacy_cfg_id = ? OR id = ? OR (token_hash = ? AND revoked_at IS NULL) LIMIT 1"
+    ).bind(config, config, tokenHash || config).first();
+    if (instRow && instRow.account_id) {
+      const linked = await env.DB.prepare("SELECT username FROM accounts WHERE id = ? LIMIT 1").bind(instRow.account_id).first();
+      if (linked) return linked.username;
+    }
+    // A saved addon link (/<id>/manifest.json) proves its account the way the
+    // manifest route accepts it (resolveConfig): its key or owner stamp, or the
+    // account id stamped by a signed-in save.
+    if (!isV2InstallParam(config) && String(config).length <= SHORT_ID_LENGTH) {
+      return await provenConfigOwnerUsername(env, await resolveConfig(config, env));
+    }
+  } catch {}
+  return "";
+}
+
+// The account a resolved install config proves, or "": the verified owner
+// (trackOwner), or the ownerId a signed-in save stamped, only while that id is
+// still the same account (created at ownerSince, active), as
+// connectionOwnerForConfig (28_) checks it. A name alone proves nothing.
+async function provenConfigOwnerUsername(env, resolved) {
+  if (!resolved || resolved.unresolved) return "";
+  if (resolved.trackOwner) return String(resolved.trackOwner);
+  const ownerId = Number(resolved.ownerId);
+  const ownerSince = Number(resolved.ownerSince);
+  if (!env || !env.DB || !ownerId || !ownerSince) return "";
+  try {
+    const row = await env.DB.prepare("SELECT username, created_at, status, deleted_at FROM accounts WHERE id = ?").bind(ownerId).first();
+    if (row && Number(row.created_at) === ownerSince && row.deleted_at == null && (!row.status || row.status === "active")) return row.username;
+  } catch {}
+  return "";
+}
+
 async function loadUserChannelsForManifest(config, env) {
   if (!config || !env || !env.CONFIGS || config === "nuvio-default" || config === "default") return [];
-  let username = "";
-  if (env.DB) {
-    try {
-      const acct = await env.DB.prepare(
-        "SELECT username FROM accounts WHERE username = ? COLLATE NOCASE OR id = ? OR key_hash = ? LIMIT 1"
-      ).bind(config, config, config).first();
-      if (acct) username = acct.username;
-      else {
-        const instRow = await env.DB.prepare(
-          "SELECT account_id FROM installs WHERE legacy_cfg_id = ? OR token_hash = ? OR id = ? LIMIT 1"
-        ).bind(config, config, config).first();
-        if (instRow && instRow.account_id) {
-          const linked = await env.DB.prepare("SELECT username FROM accounts WHERE id = ? LIMIT 1").bind(instRow.account_id).first();
-          if (linked) username = linked.username;
-        }
-      }
-    } catch {}
-  }
+  let username = await channelOwnerUsername(config, env);
   if (!username) {
     try {
       if (await env.CONFIGS.get(`creatorsyncchannels:${config}`)) username = config;
@@ -598,23 +636,7 @@ async function findChannelEntryById(wantedId, config, env) {
 
   let username = "";
   if (config && config !== "nuvio-default" && config !== "default") {
-    if (env && env.DB) {
-      try {
-        const acct = await env.DB.prepare(
-          "SELECT username FROM accounts WHERE username = ? COLLATE NOCASE OR id = ? OR key_hash = ? LIMIT 1"
-        ).bind(config, config, config).first();
-        if (acct) username = acct.username;
-        else {
-          const instRow = await env.DB.prepare(
-            "SELECT account_id FROM installs WHERE legacy_cfg_id = ? OR token_hash = ? OR id = ? LIMIT 1"
-          ).bind(config, config, config).first();
-          if (instRow && instRow.account_id) {
-            const linked = await env.DB.prepare("SELECT username FROM accounts WHERE id = ? LIMIT 1").bind(instRow.account_id).first();
-            if (linked) username = linked.username;
-          }
-        }
-      } catch {}
-    }
+    username = await channelOwnerUsername(config, env);
     if (!username && env && env.CONFIGS) {
       try {
         if (await env.CONFIGS.get(`creatorsyncchannels:${config}`)) username = config;

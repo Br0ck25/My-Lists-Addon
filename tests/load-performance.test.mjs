@@ -94,7 +94,7 @@ describe("P8-5: In-Process Load Testing & Latency Baselines", () => {
       const manifestDur = performance.now() - t0;
       assert.equal(manifestRes.status, 200);
       assert.ok(manifestRes.body.catalogs.length >= ROWS);
-      assert.ok(process.env.CI || manifestDur < 40, `manifest duration (${manifestDur.toFixed(2)}ms) should be under 40ms`);
+      assert.ok(process.env.MLA_PERF !== "1" || manifestDur < 40, `manifest duration (${manifestDur.toFixed(2)}ms) should be under 40ms`);
 
       // 2. Cold catalog row fetches (first pass)
       const coldOps0 = { ...ops };
@@ -132,9 +132,10 @@ describe("P8-5: In-Process Load Testing & Latency Baselines", () => {
       assert.equal(warmOps.d1, 0, "warm catalog rows must not query D1");
 
       // Wall-clock budgets (PERFORMANCE_AUDIT §5) only mean something on an idle
-      // machine. CI runs test files in parallel on shared runners (measured cold
-      // p90 of 613 ms there for the same code), so they are checked off CI only.
-      if (!process.env.CI) {
+      // machine: on a busy one they fail with no code change (audit TEST-06), so they run
+      // only with MLA_PERF=1 (CI included, where files run in parallel on shared runners).
+      // The storage-call counts above are always checked.
+      if (process.env.MLA_PERF === "1") {
         assert.ok(
           warmStats.p95 < 10,
           `warm cache p95 (${warmStats.p95.toFixed(2)}ms) must satisfy latency budget (< 10ms with runner overhead)`
@@ -214,8 +215,8 @@ describe("P8-5: In-Process Load Testing & Latency Baselines", () => {
         `scrobbles made ${scrobbleStatements / CONCURRENCY} D1 statements each, expected <= 8`
       );
       // Wall-clock budget: only meaningful on an idle machine (see the catalog
-      // test above), so it is checked off CI only.
-      if (!process.env.CI) {
+      // test above), so it runs only with MLA_PERF=1.
+      if (process.env.MLA_PERF === "1") {
         assert.ok(
           stats.p95 < 100,
           `scrobble burst p95 (${stats.p95.toFixed(2)}ms) must be under 100ms`
@@ -278,8 +279,8 @@ describe("P8-5: In-Process Load Testing & Latency Baselines", () => {
 
       // Verify deep pages do not suffer quadratic degradation
       // p95 of deep pages must be under 50 ms
-      // (off CI only, like the other wall-clock budgets: TEST-07)
-      if (!process.env.CI) {
+      // (only with MLA_PERF=1, like the other wall-clock budgets: TEST-06)
+      if (process.env.MLA_PERF === "1") {
         assert.ok(
           deepStats.p95 < 50,
           `deep directory pages p95 (${deepStats.p95.toFixed(2)}ms) must be under 50ms`

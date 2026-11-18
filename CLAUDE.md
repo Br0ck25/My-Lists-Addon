@@ -17,6 +17,9 @@
 11. **Multi-step work:** state a short plan with a check after each step.
 12. **Size limits:** functions ≤ 150 lines, source files ≤ 3,000 lines for new code; `tests/size-budget.test.mjs` enforces it and the baseline in `tests/size-budget.json` may only shrink (`node tests/size-budget.test.mjs --update` lowers it, never raises it).
 
+## Session start
+A SessionStart hook (`.claude/hooks/session-start.sh`) fetches, unshallows and fast-forwards the branch, because cloud containers can start from an old clone. Read its `sync:` line; if it says NOT updated, run `git fetch` and compare with `origin/<branch>` before trusting any file.
+
 ## Finding code cheaply
 - "Which file?": read `docs/FILE-INDEX.md` (5KB, one line per source file).
 - `grep` `docs/FUNCTION-MAP.md` for the symbol (~170KB: never read it whole), then read only that file with `offset`/`limit`.
@@ -27,7 +30,7 @@
 - While iterating: `bash verify.sh -q --fast` (build, syntax, scope) plus one test file, e.g. `node --test tests/design-system.test.mjs`.
 - Before commit: `bash verify.sh -q` (everything, prints one line unless a step fails). Run `python tools/gen_map.py` if functions were added, removed or moved (it rewrites `docs/FUNCTION-MAP.md` and `docs/FILE-INDEX.md`).
 - UI look changed on purpose: `node tests/ui-contract.mjs --update` and keep the `tests/ui-contract.json` diff.
-- Once per clone: `git config core.hooksPath .githooks`.
+- Once per clone: `git config core.hooksPath .githooks` (`verify.sh` now sets it if missing). If the last line of `verify.sh -q` says the browser tests were SKIPPED, say so; do not report it as fully green.
 - Release: add an entry to `docs/RELEASES.md` under the build date and stamp `python build.py` prints. `/admin` shows both; there is no release number to bump.
 
 ## Handoff (only when the user says credits are low or to wrap up)

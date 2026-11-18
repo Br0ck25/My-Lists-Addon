@@ -30,6 +30,23 @@ async function populated(extra = {}) {
   env.DB_ACTIVITY._db.prepare("INSERT INTO show_progress (account_id, media_id, last_season, last_episode, updated_at) VALUES (?, 77, 1, 1, 0)").run(id);
   db.prepare("INSERT INTO lists (public_id, owner_account_id, slug, name, media_type, visibility, like_count, created_at, updated_at) VALUES ('pubL1', ?, 'theirs', 'Theirs', 'movie', 'public', 1, 0, 0)").run(otherId);
   db.prepare("INSERT INTO likes (target_type, target_id, voter, created_at) VALUES ('list', 'pubL1', ?, 0)").run(`acct:${id}`);
+  // Later tables: resume positions and Nuvio "removed plays" (activity DB, no
+  // foreign key), saved presets, and the search-index row of its list.
+  env.DB_ACTIVITY._db.prepare("INSERT INTO watch_positions (account_id, media_id, source, position_ms, duration_ms, watched_at, updated_at) VALUES (?, 77, 'nuvio', 1000, 5000, 1, 1)").run(id);
+  env.DB_ACTIVITY._db.prepare("INSERT INTO watch_events_removed (account_id, media_id, watched_at, source, dedupe_key, removed_at) VALUES (?, 77, 1, 'nuvio', ?, 1)").run(id, `r${id}`);
+  // A list of its own, with the search-index row that carries its name and the owner's username
+  // (the purge must remove that row by list id, before the list goes).
+  db.prepare("INSERT INTO lists (id, public_id, owner_account_id, slug, name, media_type, visibility, created_at, updated_at) VALUES (9001, 'ownL1', ?, 'mine-fts', 'Mine Fts', 'movie', 'public', 0, 0)").run(id);
+  db.prepare("INSERT INTO lists_fts2 (rowid, name, description, owner_name) VALUES (9001, 'Mine Fts', '', 'annpurge')").run();
+  assert.equal(count(db, "SELECT count(*) AS n FROM lists_fts2_content WHERE c2 = 'annpurge'"), 1, "the search-index row exists before the purge");
+  db.prepare("INSERT INTO presets (account_id, name, config_json, position, created_at, updated_at) VALUES (?, 'Mine', '{}', 0, 0, 0)").run(id);
+  // A support/feedback thread filed under the account (D1 row and KV copy), and
+  // another person's that must stay.
+  const thread = (fid, who) => JSON.stringify({ id: fid, creatorName: who, subject: "Help", message: "hi", messages: [] });
+  db.prepare("INSERT INTO feedback (id, status, subject, body_json, created_at, updated_at, creator_name) VALUES ('fbAnn', 'open', 'Help', ?, 1, 1, 'annpurge')").run(thread("fbAnn", "annpurge"));
+  await env.CONFIGS.put("feedback:fbAnn", thread("fbAnn", "annpurge"));
+  db.prepare("INSERT INTO feedback (id, status, subject, body_json, created_at, updated_at, creator_name) VALUES ('fbOther', 'open', 'Help', ?, 1, 1, 'otherowner')").run(thread("fbOther", "otherowner"));
+  await env.CONFIGS.put("feedback:fbOther", thread("fbOther", "otherowner"));
   db.prepare("INSERT INTO account_recommendations (account_id, kind, rank, media_id, built_at) VALUES (?, 'series', 1, 77, 0)").run(id);
   db.prepare("INSERT INTO channels (public_code, owner_account_id, name, visibility, pool_version, created_at, updated_at) VALUES ('privch', ?, 'Mine', 'private', 1, 0, 0)").run(id);
   db.prepare("INSERT INTO channels (public_code, owner_account_id, name, visibility, pool_version, created_at, updated_at) VALUES ('sharedch', ?, 'Shared', 'public', 1, 0, 0)").run(id);
@@ -44,6 +61,14 @@ async function populated(extra = {}) {
 }
 
 function assertNothingLeft(env, db, id) {
+  assert.equal(count(db, "SELECT count(*) AS n FROM feedback WHERE id = 'fbAnn' OR creator_name = 'annpurge' OR body_json LIKE '%annpurge%'"), 0, "the support thread is deleted with the account");
+  assert.equal(env.CONFIGS._store.has("feedback:fbAnn"), false);
+  assert.equal(count(db, "SELECT count(*) AS n FROM feedback WHERE id = 'fbOther'"), 1, "another person's thread stays");
+  assert.equal(env.CONFIGS._store.has("feedback:fbOther"), true);
+  assert.equal(count(env.DB_ACTIVITY._db, "SELECT count(*) AS n FROM watch_positions WHERE account_id = ?", id), 0, "resume positions");
+  assert.equal(count(env.DB_ACTIVITY._db, "SELECT count(*) AS n FROM watch_events_removed WHERE account_id = ?", id), 0, "removed plays");
+  assert.equal(count(db, "SELECT count(*) AS n FROM presets WHERE account_id = ?", id), 0, "presets");
+  assert.equal(count(db, "SELECT count(*) AS n FROM lists_fts2_content WHERE c2 = 'annpurge'"), 0, "search index keeps no username");
   assert.equal(count(env.DB_ACTIVITY._db, "SELECT count(*) AS n FROM watch_events WHERE account_id = ?", id), 0);
   assert.equal(count(env.DB_ACTIVITY._db, "SELECT count(*) AS n FROM show_progress WHERE account_id = ?", id), 0);
   assert.equal(count(db, "SELECT count(*) AS n FROM likes WHERE voter = ?", `acct:${id}`), 0);
@@ -116,6 +141,8 @@ describe("P5-8: account.purge", () => {
     // Nothing filed under the id came with it.
     assert.equal(count(env.DB_ACTIVITY._db, "SELECT count(*) AS n FROM watch_events WHERE account_id = ?", newId), 0);
     assert.equal(count(env.DB_ACTIVITY._db, "SELECT count(*) AS n FROM show_progress WHERE account_id = ?", newId), 0);
+    assert.equal(count(env.DB_ACTIVITY._db, "SELECT count(*) AS n FROM watch_positions WHERE account_id = ?", newId), 0);
+    assert.equal(count(env.DB_ACTIVITY._db, "SELECT count(*) AS n FROM watch_events_removed WHERE account_id = ?", newId), 0);
     assert.equal(count(db, "SELECT count(*) AS n FROM likes WHERE voter = ?", `acct:${newId}`), 0);
     assert.equal(count(db, "SELECT count(*) AS n FROM account_recommendations WHERE account_id = ?", newId), 0);
     assert.equal(count(db, "SELECT count(*) AS n FROM channels WHERE owner_account_id = ?", newId), 0);

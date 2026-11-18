@@ -2744,49 +2744,7 @@ async function fetchAutoTrackedCatalog(entry, env, keys = {}) {
             if (r.is_unaired || r.isUnaired || (r.airDate && typeof isEpisodeAired === 'function' && !isEpisodeAired(r.airDate)) || (r.air_date && typeof isEpisodeAired === 'function' && !isEpisodeAired(r.air_date))) return true;
             if (fullyWatchedSet.has(sid) || (base && fullyWatchedSet.has(base))) return false;
             return true;
-          }).map(r => {
-            let isCompanion = undefined;
-            let companionType = undefined;
-            let companionNote = undefined;
-            let companionStoryline = undefined;
-            let precedingShowId = undefined;
-            let showTitle = r.show_title || undefined;
-            let kind = undefined;
-            let type = (r.season_num == null && r.episode_num == null && !r.show_title) ? "movie" : "episode";
-            if (r.show_title && r.show_title.startsWith("COMPANION:")) {
-              try {
-                const compMeta = JSON.parse(r.show_title.slice(10));
-                isCompanion = true;
-                companionType = compMeta.companionType;
-                companionNote = compMeta.companionNote;
-                companionStoryline = compMeta.companionStoryline;
-                precedingShowId = compMeta.precedingShowId;
-                showTitle = compMeta.showTitle || undefined;
-                kind = compMeta.kind || (compMeta.type === 'movie' ? 'movie' : undefined);
-                type = compMeta.type || (kind === 'movie' ? 'movie' : 'episode');
-              } catch {}
-            } else if (type === "movie") {
-              kind = "movie";
-            }
-            return {
-              id: r.item_id,
-              showId: (type === 'movie' && !r.season_num && !r.episode_num && !showTitle) ? undefined : r.show_id,
-              type: type,
-              kind: kind,
-              name: r.name || undefined,
-              poster: r.poster || undefined,
-              showTitle: showTitle,
-              showPoster: r.show_poster || undefined,
-              seasonNum: r.season_num != null ? r.season_num : undefined,
-              episodeNum: r.episode_num != null ? r.episode_num : undefined,
-              updatedAt: r.updated_at,
-              isCompanion: isCompanion,
-              companionType: companionType,
-              companionNote: companionNote,
-              companionStoryline: companionStoryline,
-              precedingShowId: precedingShowId,
-            };
-          });
+          }).map(mapContinueWatchingRow);
           if (airingRows && airingRows.length) {
             airingItems = airingRows.map(r => ({
               id: r.item_id,

@@ -165,7 +165,7 @@ describe("P9-4: Security Regression Suite", () => {
       const env = makeEnv({ DB: makeD1(), CONFIGS: kv });
       broken = true;
       const res = await call(env, "/abcdefgh/manifest.json");
-      assert.equal(res.status, 500);
+      assert.equal(res.status, 503, "a manifest that cannot be read is \"try later\" (audit API-01)");
       const text = JSON.stringify(res.body);
       assert.doesNotMatch(text, /D1_ERROR|SQLITE|secret_col|no such column/i);
       assert.equal(res.body.ok, false);

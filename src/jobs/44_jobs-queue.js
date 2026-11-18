@@ -455,3 +455,21 @@ async function handleJobsAdminApi(request, env, url, path) {
     return json({ ok: false, error: safeErrorMessage(e) }, 500);
   }
 }
+
+// OPS-07: the /admin front page line for periodic jobs that have failed
+// JOBS_PERIODIC_BACKOFF_AFTER runs in a row, from the same status the Check
+// jobs view reads. "" when none fail or there is no jobs table. Every
+// stored string is escaped.
+async function adminFailingJobsHtml(env) {
+  let failing = [];
+  try {
+    const status = typeof jobsTableStatus === "function" ? await jobsTableStatus(env) : null;
+    failing = ((status && status.periodic) || []).filter((j) => j.failuresInARow >= JOBS_PERIODIC_BACKOFF_AFTER);
+  } catch (e) {
+    console.error("Admin front page: jobs status failed:", e);
+  }
+  if (!failing.length) return "";
+  const head = failing.length === 1 ? "1 periodic job is failing." : failing.length + " periodic jobs are failing.";
+  const list = failing.map((j) => escapeHtmlServer(j.type) + " failed " + j.failuresInARow + " times in a row: " + escapeHtmlServer(j.lastError || "unknown error")).join("; ");
+  return '<div id="failingJobsAlert" role="alert" class="u-bg-rgba_255_59_48_0_12 u-bd-1px_solid_v_color_danger u-br-v_radius_sm u-p-12px_16px u-m-0_0_18px u-c-v_color_danger_text u-fs-v_font_size_sm u-lh-1_4"><strong>' + head + "</strong> " + list + ". See Maintenance &rarr; Check jobs.</div>";
+}

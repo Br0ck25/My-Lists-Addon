@@ -1,0 +1,240 @@
+# 07 Frontend, UI/UX and platform
+Health grade: B+ — The UI is consistent, responsive at all five sizes with no horizontal overflow, keyboard-safe and handles most failures well. The problems found are small: wrong wording on server errors, some tap targets and contrast values just under the target, and a design-rule test that checks less than it claims.
+
+## Scope covered (files, routes, commands run)
+- Read in full: `docs/AI_UI_RULES.md`, `tests/design-system.test.mjs`. `docs/DESIGN_SYSTEM.md` by section (touch targets, tokens, known deviations).
+- Ran the real Worker with `dev/server.mjs` on ports 8870/8871. Drove it with Playwright (Node scripts, all in `/tmp/claude-0/-home-user-My-Lists-Addon/55241830-1216-5d7f-89cf-715a0b7ec78e/scratchpad/s07/`).
+- Pages crawled at 360x740, 390x844, 768x1024, 1280x800 and 1920x1080 (`crawl.cjs`, results in `crawl-results.json`, screenshots in `shots/`): `/discover`, `/catalogs`, `/lists`, `/channels`, `/search`, `/settings`, `/guide`, `/tv`, `/nuvio-tv-launcher`, `/link`, an unknown URL (404), `/admin` (login page), `/lists/auditui`. `/admin` after login was also checked at 360, 768 and 1280 (`admin.cjs`).
+- Overflow check (scrollWidth vs innerWidth), tap targets (real hit-testing with `elementFromPoint`, `hit.cjs`), unnamed buttons and unlabelled inputs, console errors, failed requests and CSP messages on every page.
+- Keyboard and focus: Tab loop through every main tab (`focus.cjs`), modal focus trap, Escape and focus return (`modal.cjs`, `modal2.cjs`).
+- Contrast of rendered text in light and dark mode on 8 pages (`contrast.cjs`).
+- Error, slow and empty states by failing the API with Playwright route interception (`errs.cjs`, `errs2.cjs`, `errs3.cjs`).
+- State handling: delete then Undo a list, sign out in a second tab (`state.cjs`).
+- Pairing page `/tv`: keyboard keys and a click with no code (`tv.cjs`, `tv2.cjs`).
+- Mutation test of `tests/design-system.test.mjs` in a private copy (`repo/`, not the real tree).
+
+## Fix progress
+
+Updated 2026-11-15. Status values: `open`, `fixed (awaiting verification)`, `verified fixed`, `open (partially fixed, ...)`, `regression introduced (...)`. Rows marked in the Verified column were checked by an independent review on the date shown; see each finding's **Verification.** note.
+
+2026-11-15 review of UI-05 to UI-09 (branch `claude/youthful-galileo-e6ci4l`, commits used as listed below): `bash verify.sh -q` on db2230f printed `PASSED, BUT THE BROWSER TESTS (UI contract, end-to-end) WERE SKIPPED: Playwright cannot be imported here. CI runs them.` The browser checks in the notes below were made separately, with the Playwright browser tool against `dev/server.mjs`. UI-02, UI-03 and UI-04 were not reviewed and are unchanged.
+
+| Finding | Status | Commit | How to verify | Verified |
+|---|---|---|---|---|
+| UI-01 | verified fixed | ae33b9f | node --test tests/search-failure-message.client.test.mjs | 2026-11-10, independent review |
+| UI-02 | open |  | needs a browser to regenerate tests/ui-contract.json. Not attempted: Playwright cannot be imported in this session, so the contract cannot be regenerated |  |
+| UI-03 | open |  | needs a browser to regenerate tests/ui-contract.json. Not attempted: Playwright cannot be imported in this session |  |
+| UI-04 | verified fixed | cc57049 | node --test tests/subnav-pill-contrast.test.mjs. Owner chose `--color-brand-text` for the active pill text; only that colour line changed. NOTE: tests/ui-contract.json is now stale for `.subnav-pill.active` and still needs `node tests/ui-contract.mjs --update` in an environment where Playwright loads. The Simkl and other badges in the finding are not fixed (follow-up). || 2026-11-15, independent review |
+| UI-05 | verified fixed | fc295e1, d0d9bf8, 39cb58e, 601a513 | node --test tests/add-button-a11y.client.test.mjs tests/button-names-ui05.client.test.mjs. Third pass (39cb58e): remove crosses on list-card poster tiles (`.cw-remove-btn` in `.list-card-mini-poster-tile`) now read "<original label>: <item title>" from `.list-card-mini-poster-name`; new test fails on d0d9bf8 and passes now (stub DOM, no browser). Second pass (d0d9bf8) names: Retry (poster slot and catalogs preview), the /catalogs shelf "See All", every `button.list-add-btn` without data-name (card title) and directory-channel Remove, chart-card buttons by the list they really add (first data-act-args value, so "Netflix Top 10" differs from "Netflix"), and per-item remove crosses (`.cw-remove-btn`, select-list dialog Remove). Not covered: the "+ Add" in the custom-list item search (`.customListAddBtn`, adds an item, not a list). Browser tests were skipped here (no Playwright); a stub DOM was used Fourth pass (601a513): syncAddButtonA11y now tests the remove-cross selector before the data-name check, so crosses that carry the item title in data-name (Discover tile Nuvio/Stremio, livePreviewPosterHtml Trakt/MDBList) read "Remove from <provider>: <item>"; new test fails before the fix and passes now (stub DOM, no browser). | 2026-11-15, independent review |
+| UI-06 | verified fixed | 4e85ed0 | node --test tests/static-modal-focus-return.client.test.mjs; also try in a browser: open Create List with the keyboard, press Escape, focus should be back on the button | 2026-11-15, independent review |
+| UI-07 | verified fixed | 2e383c0 | node --test tests/tv-link-no-code.test.mjs | 2026-11-15, independent review |
+| UI-08 | verified fixed | 008b65c | node --test tests/design-system-budget.test.mjs (baseline in tests/design-system-budget.json: rgba 56, odd px 2, radii 0, !important 242). The two hand-styled Settings danger buttons were not changed | 2026-11-15, independent review |
+| UI-09 | verified fixed | a89c8f8 | node --test tests/lists-load-error-wording.client.test.mjs | 2026-11-15, independent review |
+
+## Proven findings   (ordered by severity)
+
+### UI-01 A failing search shows "No titles found." instead of an error
+- Severity: Medium
+- Status: Proven
+- File:line: `src/client/19_client-search-and-likes.js:5547-5549` (titles) and `:5515` with `:5527-5530` (public lists)
+- What is wrong: If the title-search request answers with an error (HTTP 500, or `ok:false`), the code treats it the same as an empty result and prints "No titles found." Only a network failure (an exception) prints "Could not load top titles." The same pattern is in the Lists search: a failed lookup is turned into `{ok:false, lists:[]}` and shown as "No published My Lists Addon lists available yet."
+- Impact: When the server has a problem, the person sees a calm "nothing exists" message with no retry hint, and may think the catalogue is empty or that their filters are wrong. A real outage looks like an empty product.
+- Proof: `/tmp/claude-0/-home-user-My-Lists-Addon/55241830-1216-5d7f-89cf-715a0b7ec78e/scratchpad/s07/errs3.cjs` (title-search route forced to 500):
+  ```
+  SEARCH 500 -> der All Ratings 8.0+ ⭐ 7.0+ ⭐ 6.0+ ⭐ 5.0+ ⭐ No titles found.
+  ```
+  Compare with the earlier run in `errs.cjs` where the request is aborted (network failure) and the page shows `✗ Could not load top titles.`
+- Recommended fix and effort: When `!res.ok` or `data.ok === false`, show the same "Could not load top titles." message (with a Retry). Do the same for the public lists lookup. S.
+
+**Verification.** 2026-11-10, independent review: **verified fixed**. Read ae33b9f. The new test fails against the parent commit (2 pass, 3 fail). HTTP 500 and `ok:false` from `/api/title-search` show `Could not load top titles.`, and a failed `/api/search-published-lists` shows `Could not load public lists.`. Real empty answers still show the empty messages. Both server routes do return `ok:true` on success, so a good empty answer is not mistaken for an error. No Retry button was added; the finding offered it as optional.
+
+### UI-02 Search page type pills have only a 31px tap area on phones
+- Severity: Low
+- Status: Proven
+- File:line: `src/page/13_tab-channels.js:432` (the pill bar is given `u-p-0`); extension rule `src/page/09_page-shell.js:5198-5200`
+- What is wrong: The design promises that pills keep a small look but get a 44px invisible hit area on phones. The pills bar on Search is a scrolling strip (`overflow-x:auto` makes `overflow-y` clip) with its padding forced to 0, so the invisible extension is cut off. The Movies / Shows / Lists pills are 74x31 and respond only inside that.
+- Impact: On a phone these are the main controls of the Search page and are easy to miss with a thumb. Other pill bars (Lists, Catalogs, Discover) are not affected in the same measurement.
+- Proof: `.../s07/hit2.cjs` at 360px:
+  ```
+  {"rect":[74,31,184],... "after":{"top":"-7px","bottom":"-7px","height":"43px"}, "above3":"DIV.panel", "below5":"DIV.search-filters-toolbar", "inside":"BUTTON.subnav-pill", "parent":"subnav-pills-bar u-m-0 u-p-0 u-fsh-0","ov":"hidden/auto"}
+  ```
+  A point 3px above the pill hits the panel, not the pill. `hit.cjs` also lists the three filter `<select>` elements on Search at 31px high (the rule says inputs are 44px high): `select#catalogSearchGenreSelect.search-filter-select ... 180x31`.
+- Recommended fix and effort: Give that bar the same vertical padding the other pill bars have (so the extension has room), and give `.search-filter-select` the 44px minimum on phones. The test `UI-17` only checks that the CSS rule exists, so add a real hit-test or measurement. S.
+
+### UI-03 The theme (light/dark) button is 35px on phones, with no extension
+- Severity: Low
+- Status: Proven
+- File:line: `src/page/09_page-shell.js:5204` (extension list names `.header-icon-btn`, `.header-avatar-btn`, `button.modal-close-x`, `.search-clear-btn` but not `.theme-toggle-btn`); size at `:496`
+- What is wrong: The theme toggle sits between the search button and the avatar. Those two get an invisible 4px extension (41px target); the theme toggle does not (35x35).
+- Impact: Smaller than the 44px target the design sets, and smaller than its two neighbours. Easy to hit the wrong button.
+- Proof: `.../s07/hit.cjs` output on every app page: `button.theme-toggle-btn.dark-mode-toggle "Toggle Light or Dark" hit 35x35` versus `header-search-btn hit 41x41`. Also the guide page: `button.theme-toggle-btn "Toggle Dark/Light Mo" hit 32x37`, and its contents pills (`a.toc-pill`) are 38px high.
+- Recommended fix and effort: Add `.theme-toggle-btn` to the extension rule (it already uses `position:relative`). S.
+
+### UI-04 Text on the active pill is below the 4.5:1 contrast the rules require
+- Severity: Low
+- Status: Proven
+- File:line: `src/page/09_page-shell.js:1083-1089` (`.subnav-pill.active`, text `--accent` on `--color-brand-subtle`)
+- What is wrong: The active pill is blue text on a pale blue wash. Against the light grey page it measures 4.11:1 (13.6px bold text, so the 4.5:1 rule applies). In dark mode the same pill and the "Simkl" source badge measure 3.76:1. The TMDB source badge in light mode is 4.35:1; the guide's "No Key Required" tag is 3.68:1 (light) and 4.01:1 (dark).
+- Impact: The currently selected tab/filter on almost every page is a little hard to read for people with low vision, and the app's own rule 9 ("Contrast >= 4.5:1") is broken on its most repeated component. The existing contrast tests only cover solid brand fills and danger buttons, so this passed.
+- Proof: `.../s07/contrast.cjs` (computes text colour against the real blended background in a browser), trimmed:
+  ```
+  ## light /lists: 1
+     4.11 button.subnav-pill.active "✓ My Lists" rgb(0, 102, 214) on rgb(213,225,243) 13.6px
+  ## dark /discover: 1
+     3.76 span.list-source-badge.badge-simkl "Simkl" rgb(10, 132, 255) on rgb(25,47,71) 10.88px
+  ## dark /search: 3.76 button.subnav-pill.active ...
+  ```
+  Computed style of the pill: `color rgb(0,102,214)`, `background rgba(0,102,214,0.12)`. Over `#F2F2F7` that is the 4.11 above (over a white panel it is 4.56, which is why it looks fine in cards).
+- Recommended fix and effort: Use a darker `*-text` token for the text on `--color-brand-subtle` (as the rules already do for warn/danger), and add the pill and badge pairs to the contrast test. S.
+
+**Verification.** 2026-11-15, independent review on branch `claude/youthful-galileo-e6ci4l` (report taken from the same branch; fix commit cc57049, found as listed). `src/page/09_page-shell.js:1085` now reads `color: var(--color-brand-text);`; the token was already defined for both themes (`src/core/00_constants.js:1833` `#0059BD` in `:root`, `:1995` `#64B0FF` in `:root.dark-theme`). `tests/subnav-pill-contrast.test.mjs` fails on cc57049~1 (git worktree, test copied in, rebuilt: "not ok 1 - draws its text with --color-brand-text") and passes on HEAD (2/2). Contrast recomputed from the tokens (WCAG formula, wash blended over the real backgrounds): old `--accent` light page 4.11, light card 4.56, dark page 4.91, dark card (`#1C1C1E`) 3.74; the finding's 4.11, 4.56 and 3.76 match (3.76 vs 3.74 is browser rounding of the blended colour, and the dark 3.76 is on the card/surface background). New `--color-brand-text`: light page 5.02, light card 5.58, dark page 7.84, dark card 5.98, all at least 4.5:1. Browser check done with the Playwright browser tool against `dev/server.mjs`: the visible active pill on /lists, /catalogs, /channels, /settings, /discover and /search computes `rgb(0, 89, 189)` light and `rgb(100, 176, 255)` dark, and also after switching tabs in-app from /catalogs to Lists, Channels and Settings. Residual, not a reason to send it back: the four pre-JS rules `html[data-initial-*-sub] ... .subnav-pill[data-sub=...]` (`09_page-shell.js:662-670, 704-713, 745-752, 792-802`) still set `color: var(--accent) !important`; they only apply before the app scripts run (the panels are hidden by `data-app-pending` then) or to bars on hidden tabs, and the browser showed each tab's attribute removed once the tab is drawn, so they only show if the scripts never load. The `.check-icon` tick stays `--accent` (an icon, above the 3:1 non-text minimum). The Simkl/TMDB badges and the guide tag remain open follow-ups, as the row says. `bash verify.sh -q` final line: `PASSED, BUT THE BROWSER TESTS (UI contract, end-to-end) WERE SKIPPED: Playwright cannot be imported here. CI runs them.` The UI contract snapshot is still stale: `tests/ui-contract.json:1162` and `:1184` store the old `rgb(10, 132, 255)` / `rgb(0, 102, 214)` for `subnav-pill active`, and it was not regenerated here; it still needs `node tests/ui-contract.mjs --update` where Playwright loads.
+
+### UI-05 Many buttons have identical names, so a screen reader cannot tell them apart
+- Severity: Low
+- Status: Proven
+- File:line: card buttons are built in `src/client/19_client-search-and-likes.js` and `src/client/22_client-creator-profile.js`; the Quick Add "+ Shows" / "+ Movies" buttons are in the page markup (`data-act="addRow"`, served in `/`)
+- What is wrong: The Like and Customize buttons carry an `aria-label` naming the list, but "+ Add", "Remove", "See All ›" and "Retry" do not. A person using a screen reader hears "+ Add, button" 17 times on Discover with no list name.
+- Impact: Screen-reader and voice-control users cannot tell which list a button belongs to ("click Remove" matches 23 buttons). The home page also contains 139 "+ Shows" buttons that differ only by the catalogue they sit next to.
+- Proof: `.../s07/names.cjs` and `names2.cjs`:
+  ```
+  /discover Like this list x40 (with aria-label/desc: 40) | Customize in List Builder x40 (40) | + Add x17 (0) | Retry x9 (0) | Remove x23 (0)
+  /catalogs See All › x9 (with aria-label/desc: 0)
+  <button type="button" class="lc-btn list-add-btn primary searchAddBtn" data-name="New on Streaming" data-url="tmdb:new-on-streaming" data-type="movie">+ Add</button>   (no aria-label, no title)
+  ```
+  `curl http://127.0.0.1:8870/ | grep -c '+ Shows'` gives 139.
+- Recommended fix and effort: Add `aria-label="Add <name> to my lists"` / `Remove <name>` etc. where these buttons are built (the data-name is already there). S-M.
+
+**Verification.** 2026-11-15, independent review: **partially fixed**, Status set back to `open`. Read fc295e1 (new `src/client/20_client-add-button-a11y.js`, a MutationObserver that sets `aria-label` from `data-name` and the `is-added` class). The new test fails on the old code (3 of 3 fail with the file removed). In a real headless Chromium against `dev/server.mjs`: a `.searchAddBtn` card button reads "Add Verifier Test List to my lists", and after a real click through the page's own handler "Remove ... from my lists", then back again, so the label follows the state. Quick Add "+ Movies"/"+ Shows"/"See All ›" now carry the card title. What is done works. What is still wrong:
+1. **Retry** buttons: still unnamed (/discover still has 5 visible "Retry" with no name). The fixer said this up front.
+2. **The /catalogs "See All ›" from the audit's own proof are not covered.** They are the live-preview shelf buttons (`button.text-action-btn` in `.live-preview-shelf-title`, built in `src/client/16_client-row-core.js:4162`), not `a.discover-chart-seeall`. Measured: 8 visible "See All ›" on /catalogs with no name after the fix.
+3. **Other "+ Add"/"Remove" list buttons are not covered.** The selector is `button.searchAddBtn[data-name]` only. The same repeated text is also built as `.myListAddBtn`/`.myPrivateListAddBtn` (`17_client-my-lists-and-trakt-oauth.js:394, 1291, 1656, 2689`), `.creatorListAddToConfigBtn` (`22_client-creator-profile.js:4996`), `.localListAddToConfigBtn` (`21_client-custom-list-builder.js:4435`), `.channelAddBtn` (`20_client-channel-builder.js:9560, 10647, 13305`) and the unnamed-class add buttons at `17_client-my-lists-and-trakt-oauth.js:2097, 5069, 5109, 5156, 5189`. These could not be seen on screen here (stubbed providers, no sign-in), so how many show on Discover today is not measured. The report row's "Covers + Add/Remove" means the `.searchAddBtn` ones only.
+4. **New: 27 Quick Add names are still shared by two different buttons.** The label uses the card title, but the Streaming Top 10 and Streaming (All Services) sections both have cards titled "Netflix", "Apple TV+", "Disney+", "HBO Max", "Hulu" and so on. In `#catalogsQuickAddContainer` 54 of 208 buttons share their name with a button that adds a different list: both are "Add Netflix movies", but one adds "Netflix Top 10" (mdblist netflix-top-10) and the other "Netflix" (`tmdb:chart:netflix`). The same is true in `#discoverShelvesContainer`. The add button's own first `data-act-args` value (the real label, "Netflix Top 10") would tell them apart.
+5. Per-item "Remove" in list details and channels: not covered (stated by the fixer).
+No regression found: the observer only watches `class` changes, so writing `aria-label` does not set it off again.
+
+**Verification (second pass, d0d9bf8).** 2026-11-15, independent review: **partially fixed**, Status stays `open`. Commits used: fc295e1 and d0d9bf8 as listed (both found on `claude/youthful-galileo-e6ci4l`). Checked in a real headless Chromium (Playwright browser tool) against `dev/server.mjs` on port 8890, reading the `aria-label` the page's own observer wrote:
+1. **Retry: fixed.** /discover has 5 visible Retry buttons, all named and all different ("Retry loading previews for TMDB Trending", "... for TMDB Popular", ...). The /catalogs shelf Retry (`data-act="renderLivePreview"`) reads "Retry loading Trending - Movies".
+2. **/catalogs shelf "See All ›": fixed.** 8 visible, 0 unnamed, each "See all of <shelf title>".
+3. **Other "+ Add"/"Remove" list buttons: fixed.** Visible /discover "+ Add" (17) and "Remove" (23) are all named and all different. Markup copied from the builders and put into the live page: a creator card button with no `data-name` (22:4996) reads "Add My Picks to my lists", and after the same class/text flip `updateAllListAddButtons` does, "Remove My Picks from my lists", then back; the directory-channel Remove (20:12316) reads "Remove Sci-Fi Channel from my lists".
+4. **Duplicate Quick Add names: fixed.** In `#catalogsQuickAddContainer` (208 buttons) and `#discoverShelvesContainer` (211) no name is now shared by two buttons that add different lists (was 54 of 208). The only repeats left are "Netflix Kids" movies/shows/See All, which appear twice and add the same list, so that is not ambiguous.
+5. **Per-item Remove: partially fixed.** Named: the See All grid cross (`.live-preview-poster-card`, 23:2107) reads "Remove from history: Heat", channel and custom-list picks, and the select-list dialog Remove ("Remove from Favourites"). **Still wrong:** the remove crosses on list-card poster tiles (`.cw-remove-btn` inside `.list-card-mini-poster-tile`, name in `.list-card-mini-poster-name`), which is where most of them are: My Lists provider previews `17_client-my-lists-and-trakt-oauth.js:418, 453, 1326, 1360, 1680, 2707`, Discover/catalog poster slots `19_client-search-and-likes.js:1390, 1394, 1400`, `21_client-custom-list-builder.js:4417` and `22_client-creator-profile.js:4949, 5244-5255`. `a11yOtherLabel` only looks for `.live-preview-poster-card`, so in the browser two tiles "Dune" and "Arrival" both stay "Remove from Trakt History". Next fix: also read `.list-card-mini-poster-name` from the nearest `.list-card-mini-poster-tile`, and add a test with that markup.
+
+Tests: `tests/button-names-ui05.client.test.mjs` on d0d9bf8's parent (rebuilt, test copied in) gives 9 of 10 failing; the one that passes ("myListAddBtn uses its own data-name") calls the function directly and was already handled by fc295e1. `tests/add-button-a11y.client.test.mjs` fails 3 of 3 on fc295e1's parent. Both pass at HEAD (13 of 13). The stub DOM in the new test does not model `.list-card-mini-poster-tile`, which is why the gap in item 5 was not caught. Not in this finding but seen: `#detailAddBtn` (one per List Details page) and the collection picker "+ Add" (`addPickerListToCollectionDraft`) have no name, and 11 "+ Add all" section buttons share one name. The change touches only `src/client/20_client-add-button-a11y.js`, its test and the generated docs; nothing else changed or loosened.
+
+Full check on 19aabb4: the first `bash verify.sh -q` run stopped at step 6b with 1 failure out of 3879, in `tests/preview-chart-limit.test.mjs` ("walking a chart's deep pages is still limited", PERF-03, server code that UI-05 does not touch). Run alone in v2 mode it passed 3 out of 3 times, so it looks flaky when the whole suite runs. A second full run printed `PASSED, BUT THE BROWSER TESTS (UI contract, end-to-end) WERE SKIPPED: Playwright cannot be imported here. CI runs them.` The browser checks above were made separately with the Playwright browser tool.
+
+**Verification (third pass, 39cb58e).** 2026-11-15, independent review: **regression introduced**; Status records that verdict and the item 3 fix is needed before UI-05 can be verified. Commits used: fc295e1, d0d9bf8 and 39cb58e as listed (all on `claude/youthful-galileo-e6ci4l`). Checked in a real headless Chromium (Playwright browser tool) against `dev/server.mjs` on port 8892, reading the `aria-label` the page's own observer wrote.
+1. **Poster-tile crosses (the gap from the second pass): fixed.** Two `.cw-remove-btn` crosses in `.list-card-mini-poster-tile` (markup copied from `19_client-search-and-likes.js:1390`) read "Remove from Trakt: Dune" and "Remove from Trakt: Arrival". The new test "remove crosses on list-card poster tiles name their own item" fails on 39cb58e's parent (rebuilt, test copied in: 10 pass, 1 fail, that one) and passes at HEAD (14 of 14 across both UI-05 test files).
+2. **Still fine from earlier passes:** /discover has 5 visible Retry, 17 "+ Add" and 23 "Remove", none unnamed, no name repeated. /catalogs has 8 shelf "See All ›", all named ("See all of Popular - Movies", ...). In `#catalogsQuickAddContainer` (208) and `#discoverShelvesContainer` (211) no Quick Add name is shared by buttons that add different lists; the only repeat, "Netflix Kids", adds `tmdb:chart:netflixkids` in both places (only the section argument differs).
+3. **Regression (from d0d9bf8, not caught by the second pass): a remove cross is announced as an Add button.** `syncAddButtonA11y` (`src/client/20_client-add-button-a11y.js:94`) sends any button that has a `data-name` to the list-button path, which writes "Add <name> to my lists" unless the button has `is-added` or text starting "Remove". Two cross builders put the *item* title in `data-name`: the Nuvio/Stremio cross on Discover poster tiles (`19_client-search-and-likes.js:1394`) and the external-provider (Trakt/MDBList) cross on list-details and See All posters (`23_client-list-management.js:1981`, `livePreviewPosterHtml`). In the browser a Nuvio cross on the "Heat" tile reads "Add Heat to my lists", and a Trakt watchlist cross on the "Alien" poster card reads "Add Alien to my lists". Before d0d9bf8 these read "Remove from Nuvio" / "Remove from trakt"; now a destructive button says the opposite of what it does. Next fix: in `syncAddButtonA11y`, check `ITEM_REMOVE_SELECTOR` (or `button.cw-remove-btn`) before the `data-name` test so crosses always go to `a11yOtherLabel`, and add a test with a cross that has `data-name`.
+4. Edge case seen, harmless: a tile whose `.list-card-mini-poster-name` is empty keeps its original label ("Remove"); it does not fall back to the tile's `data-title`.
+
+**Not named, and whether it is UI-05:** `#detailAddBtn` ("+ Add", one per List Details page) and the collection picker "+ Add" (`src/page/09_page-shell.js:5499`, one static button) have no `aria-label`, but each appears once, so a screen reader is not left with identical repeated names; not part of UI-05. The 11 "+ Add all" section buttons (`qa-add-all-btn`, `src/page/10_tab-search-add.js:110` onwards) all read "+ Add all" with no name: the same repeated-name problem, but the finding did not list that text or count it; treat it as a new follow-up finding rather than a reason to hold UI-05.
+
+Full check: `bash verify.sh -q` on 88bc147 printed `PASSED, BUT THE BROWSER TESTS (UI contract, end-to-end) WERE SKIPPED: Playwright cannot be imported here. CI runs them.` The browser checks above were made separately with the Playwright browser tool. Only `src/client/20_client-add-button-a11y.js`, its test and generated files changed in 39cb58e; no test or guard was loosened.
+
+**Verification (fourth pass, 601a513).** 2026-11-15, independent review: **verified fixed**. Commits used: 601a513 (fix and test), c364c36 (FILE-INDEX only) and fbe5129 (report), all on `claude/youthful-galileo-e6ci4l`, which already held the newest report. The change is one condition in `syncAddButtonA11y` (`src/client/20_client-add-button-a11y.js:96`): a button matching `ITEM_REMOVE_SELECTOR` now goes to `a11yOtherLabel` before the `data-name` test. Only that file, `tests/button-names-ui05.client.test.mjs` and generated files changed; nothing was loosened.
+1. **Root cause, not just the two examples.** `grep` shows exactly two remove-cross builders that put `data-name` on the button (`19_client-search-and-likes.js:1394`, `23_client-list-management.js:1981`), and no Retry, shelf See All or `removeSingle*` button carries `data-name`, so no other button in `ADD_BUTTON_SELECTOR` can fall into the add path by mistake. No button has both `list-add-btn` and `cw-remove-btn`.
+2. **Test fails before, passes now.** In a `git worktree` at 601a513's parent (rebuilt, new test copied in): 14 pass, 1 fail, the new "remove crosses that carry data-name are named as removals, never as adds". At HEAD both UI-05 test files pass, 15 of 15.
+3. **Real browser: yes.** Headless Chromium through the Playwright browser tool against `dev/server.mjs` on port 8894, reading the `aria-label` the page's own observer wrote. A Nuvio cross (markup from 19:1394) on a "Heat" tile reads "Remove from Nuvio: Heat"; the page's real `livePreviewPosterHtml` with a Trakt watchlist cross on "Alien" reads "Remove from trakt: Alien", and an MDBList history episode cross on "Ozark" reads "Remove from mdblist: Ozark". Edge cases: a cross with `data-name` and no card around it keeps "Remove from Trakt" (not "Add ..."); a class change on a cross does not turn it into an add. No `cw-remove-btn` on /discover or /catalogs reads "Add ...".
+4. **The rest of UI-05 still holds (same browser run).** /discover: 5 visible Retry, 17 "+ Add" and 23 "Remove", all named, no name repeated; a `.searchAddBtn` flips "Add New on Streaming to my lists" to "Remove ... from my lists" and back with the `is-added` class. /catalogs: 8 visible shelf "See All ›", all named and distinct ("See all of Popular - Movies", ...). `#catalogsQuickAddContainer` (208) and `#discoverShelvesContainer` (211): no unnamed button and no name shared by buttons that add different lists. Poster-tile crosses read "<label>: <item>". The only unnamed "+ Add" are `#detailAddBtn` and the collection picker, one each, already ruled out of UI-05 in the third pass.
+5. Cosmetic, not a defect of this fix: the Trakt/MDBList cross label uses the raw provider id ("trakt", "mdblist") because that is the original `aria-label` the builder writes.
+
+Full check: `bash verify.sh -q` at fbe5129 printed `PASSED, BUT THE BROWSER TESTS (UI contract, end-to-end) WERE SKIPPED: Playwright cannot be imported here. CI runs them.` The browser checks above were made separately with the Playwright browser tool. The "+ Add all" follow-up from the third pass is still a separate, unrecorded finding.
+
+### UI-06 Six dialogs do not return keyboard focus to the button that opened them
+- Severity: Low
+- Status: Proven
+- File:line: `src/client/16_client-row-core.js:2236-2290` (static modal handler, Escape and Tab only) and `src/client/22_client-creator-profile.js:6113-6118` (`closeCreateListModal`). `showModal()` does it right (`_modalReturnFocus`, `16_client-row-core.js:2298-2331`).
+- What is wrong: Create list, Select list, Add shelf, Import list, Import channel and the Trakt device dialog are fixed markup. They trap Tab and close on Escape correctly, but when they close, focus drops to the page body instead of going back to the button used to open them.
+- Impact: Keyboard and screen-reader users lose their place on the page after every one of these dialogs and must Tab from the top.
+- Proof: `.../s07/modal.cjs` (focus the "+ Create List" button, press Enter, Tab around, press Escape):
+  ```
+  tab3 {"active":"BUTTON#.lc-btn secondary Cancel", ...}   (focus cycles inside: trap works)
+  after-esc {"active":"BODY#.hide-badge-imdb-rating Lists ..."}   (focus is on BODY)
+  ```
+- Recommended fix and effort: Remember `document.activeElement` when a static modal is opened and focus it again in `closeStaticModal` and the specific close functions. S.
+
+**Verification.** 2026-11-15, independent review: **verified fixed**. Read 4e85ed0 (new `src/client/20_client-static-modal-focus.js`: a capture `focusin` listener remembers the last focused control outside the six dialogs, and a MutationObserver on each dialog's `style` gives focus back when none is visible). The new test fails on the old code (3 of 3 fail with the file removed). The unit test calls `syncStaticModalFocus` directly, because the harness has no MutationObserver, so it does not prove the observer is wired up. I checked that part separately in a real headless Chromium (Playwright) against `dev/server.mjs` on /lists. I focused the real "+ Create List" button, opened each of the six dialogs the way their open functions do (set `display:flex`, move focus inside), then pressed Tab and Escape: focus was inside each dialog while it was open, and after Escape it was back on "+ Create List" for all six (createListModal, selectListModal, addShelfModal, importListModal, importChannelModal, traktDeviceModal). Closing Create List by clicking its Cancel button also returned focus. Limit: the real `openCreateListModal` needs a signed-in account, and in this session it did nothing, so the full sign-in, keyboard Enter, dialog path was not driven end to end. The observer is safe on load: the file is in the deferred `/app-features.js` (after `MYLISTS_APP_BUNDLE_END` in `18_client-copy-and-trakt-export.js:1759`), so all six dialogs are already in the page when it attaches. No close function moves focus on purpose, so the restore overrides nothing. Edge case: if the opener is removed from the page while the dialog is open, focus goes to BODY (the old behaviour), with no error.
+
+### UI-07 `/tv` shows an enabled "Link TV Now" button even when there is no pairing code
+- Severity: Low
+- Status: Proven
+- File:line: `src/api/25_api-catalog-routes.js:972` (click handler), `:1030` (button markup)
+- What is wrong: Opening `/tv` or `/link` without `?code=` shows "PAIRING CODE —" and an enabled blue "Link TV Now" button. Pressing it says only "Missing pairing code." There is no hint where the code comes from (the TV).
+- Impact: A person who opens the page from a bookmark or a typed address gets a dead end.
+- Proof: `.../s07/tv2.cjs`:
+  ```
+  disabled? false
+  ... PAIRING CODE — Signed in as auditui Link TV Now Cancel Missing pairing code.
+  ```
+- Recommended fix and effort: When there is no code, disable the button and say "Open this page from the code shown on your TV." S.
+
+**Verification.** 2026-11-15, independent review: **verified fixed**. Read 2e383c0 (`src/api/25_api-catalog-routes.js:1034-1035`). The new test fails on the old code (2 of 4 fail: the two no-code cases). In a real headless Chromium: `/tv`, `/link` and `/tv?code=%20%20` (blank after trim) show the hint and a disabled "Link TV Now"; `/tv?tv_code=ab12` (the second parameter name, lower case) and `/tv?code=ABCD-1234` show the code, an enabled button and no hint. The page script only re-enables the button inside its own click handler, which a disabled button cannot reach. The "Missing pairing code." check stays as a backstop.
+
+### UI-08 The design-system test lets several rule breaks through
+- Severity: Low (process risk, not a user bug)
+- Status: Proven
+- File:line: `tests/design-system.test.mjs:16-21` (drops every `.u-*` line), `:72-79` (hex only), `:351-373` (script checks cover `src/client/` only)
+- What is wrong: `AI_UI_RULES.md` forbids hard-coded rgba, odd pixel values (5/7/9/11/13px) and new radii, and says buttons are pills. The test checks only hex colours, rem font sizes, breakpoints, `transition: all` and a few contrast pairs. There is no allowlist hiding hex colours in the component CSS (it really is 0), but rgba, odd pixels, radii and `!important` count are not checked at all.
+- Impact: The rule document says one thing and the test enforces less, so a future change can add rule-breaking CSS and still show "ALL CHECKS PASSED". It already exists in the product:
+  - 56 hard-coded `rgba(...)` values sit in component CSS outside the token block (for example `.bottom-nav`, `.cw-remove-btn`, `.channel-crossover-chip`, `.list-source-badge.badge-tmdb`).
+  - Two Settings danger-zone buttons (Reset Account Data, Delete Account) are hand-styled with `u-bg-v_color_warn_fill u-br-v_radius_sm` instead of `.btn-danger`, so they are rounded rectangles, not pills (`src/client/22_client-creator-profile.js:631` and `:636`).
+  - Component CSS has 242 `!important` (the rules say "about 241 remain; don't add").
+- Proof (mutation, in a private copy, real tree untouched): in `repo/src/page/09_page-shell.js` I changed `.subnav-pill.active` to `background: rgba(12, 34, 56, 0.5); padding: 7px 13px; margin: 5px; border-radius: 9px;` (a hard-coded colour, three odd pixel values and a new radius), ran `python3 build.py`, then:
+  ```
+  node --test tests/design-system.test.mjs
+  # tests 28
+  # pass 28
+  # fail 0
+  ```
+  Count commands: `python3` over `curl localhost:8870/app.css` gives `rgba outside root: 56`, `!important comp: 242`.
+- Recommended fix and effort: Add a ratcheting count test for rgba literals, odd pixel values and non-token radii in the component CSS (baseline = today's numbers, may only shrink), as is already done for source size. M.
+
+**Verification.** 2026-11-15, independent review: **verified fixed**. Read 008b65c (new `tests/design-system-budget.test.mjs` and its baseline; no source changed). I replayed the audit's exact mutation in a scratch worktree (`.subnav-pill.active` given `background: rgba(12, 34, 56, 0.5); padding: 7px 13px; margin: 5px; border-radius: 9px;`, rebuilt). `design-system.test.mjs` still passes 28/28, as before, but the new test fails with `rgbaLiterals: 56 -> 57, oddPixelValues: 2 -> 6, nonTokenRadii: 0 -> 1` (9px is odd too). One added `!important` fails it (`242 -> 243`), and so does `border-radius: 999px` alone. Its baseline numbers match the audit's own counts (56 rgba, 242 `!important`). `verify.sh` runs it through `tests/*.test.mjs`. Gaps for a later pass, not blocking: a negative odd value (`margin: -7px`) is not counted (the look-behind excludes `-`; tried, test stayed green); only `/app.css` is measured, so inline `style="..."` in client JS and the `u-*` helpers are outside it; the long-hand `border-top-left-radius` and similar are not checked. The two hand-styled Settings danger buttons (`22_client-creator-profile.js:631, 636`) are unchanged, as the fix row says; the recommended fix asked only for the ratchet.
+
+### UI-09 Server error text is shown to people as-is, without the "Could not ..." wording
+- Severity: Info
+- Status: Proven
+- File:line: `src/client/22_client-creator-profile.js:4831` (prints `data.error` from the server; only falls back to "Could not load your lists." when the server sends no text); shown by `.../s07/errs.cjs`
+- What is wrong: When the lists request fails with HTTP 500, the page prints the server's own message after a cross: `✗ boom` / `✗ db down`. Rule 8 says errors start with "Could not ...". Network failure prints a proper "Network error loading your lists."
+- Impact: Cosmetic. Today the server's message is short; if it ever sends technical text, the person sees it.
+- Proof: `errs.cjs` (all API calls fail with 500): `... Refresh ✗ boom Your MDBList Lists ...`; `errs3.cjs`: `... Refresh ✗ db down ...`.
+- Recommended fix and effort: Prefix with "Could not load your lists." and show server text only as a detail. S.
+
+**Verification.** 2026-11-15, independent review: **verified fixed** for the place named in the finding. Read a89c8f8 (`src/client/22_client-creator-profile.js:4810`). The new test fails on the old code (1 of 2 fails: "✗ db down" was the message). Server text is still escaped (`escapeHtml`) and is now shown in `<small>(...)</small>` after "✗ Could not load your lists."; with no server text only the sentence shows. Same pattern elsewhere, not fixed and not part of this finding as written (the audit only saw the Lists one on screen): `escapeHtml(data.error || 'Could not ...')` still puts the server's text in place of the sentence at `17_client-my-lists-and-trakt-oauth.js:42, 973, 1068, 1601, 2515`, `23_client-list-management.js:1367, 2589, 3868` and `20_client-channel-builder.js:91, 232`. A later pass could reuse this same wording at those places.
+
+## Unproven suspicions   (not counted)
+- The auto-tracked "Continue Watching" card shows the type label "Shows" (screenshot `shots/_lists-360.png`, label code `src/client/22_client-creator-profile.js:5375`), while the app's own blurb for that list says it holds "movies part way through and the next episode of your shows" (`src/client/17_client-my-lists-and-trakt-oauth.js:2094`). I could not produce a movie in that list in the stubbed environment (outbound providers return nothing), so the wrong label is not shown on screen. If movies can appear there, the label is wrong for them.
+- Every page load of a person who has the Account Key but no session logs three 401 console errors (`/api/connections`, `/api/connections/stremio/settings`, `/api/connections/nuvio/settings`, plus `/api/me`). They are probably the designed "not connected" answer (no user-visible effect), but I did not trace whether the session cookie is simply not being issued in this local setup.
+- TV-remote arrow-key navigation: the `/tv` and `/nuvio-tv-launcher` pages are phone/desktop web pages, not a lean-back TV UI. Arrow keys do nothing there and Tab works; I did not treat that as a bug.
+
+## Checked and rejected  (suspected, turned out handled; say what guard handles it)
+- Horizontal overflow: none on any page at any of the five sizes (`documentElement.scrollWidth - innerWidth` is 0 or negative on all 70 page/size combinations in `crawl-results.json`).
+- Hard-coded hex colours in component CSS: really zero (the test is not hiding anything; only rgba is missed, see UI-08).
+- "Second set of :root variables" on `/tv`, `/guide`, `/admin`: each page inlines the single `DESIGN_TOKENS_CSS` block (198 variables, same names), not its own palette.
+- Missing focus rings: Tab through Lists, Settings, Discover, Catalogs, Channels and Search found 0 focus stops without an outline or ring (`focus.cjs`).
+- Modal focus trap and Escape: work for both `showModal()` dialogs and the static dialogs (Tab cycles inside; Escape closes). Only focus return is missing (UI-06).
+- Danger/Reset buttons "with no name" and "2.66:1 red text" on Settings: those were inside a closed `<details>`; the buttons have text ("Reset Account Data", "Delete Account & All Data") and the red text is not visible until opened.
+- Stale UI after delete + Undo: deleting a list removes the card, Undo brings it back and the server list matches (`state.cjs`: server `['Watchlist']` after delete, `['Watchlist','Audit Movies']` after Undo).
+- Sign out in another tab: the first tab reloads and shows the signed-out state (`src/client/20_client-cross-tab.js`; `state.cjs` shows `name null`).
+- Empty and failure states on Discover, Catalogs: per-shelf "Couldn't load previews for this list. Retry" / "✗ Could not load this catalog. Retry", and "Loading…" while slow. Channels page lists are fed from account sync data, so a failed sync shows the normal empty state with no error (same family as UI-01 but I could not show data loss; no overwrite happened: after the failed load only `POST /api/creator/restore` (59 bytes) was sent, no save of an empty state).
+- CSP violations: none on the real origin. (On `localhost` the dev server writes `127.0.0.1` URLs into the page and the browser blocks the icon; that is the dev server only.)
+- Wording: no movie is labelled "show" or "episode" in the shell HTML or the rendered tabs. "Episodes" appears only in the Watch History / Continue Watching filters and channel settings where episodes exist.
+- Console errors and failed requests on all pages: apart from the 401 noise above and the expected 404 on the 404 page, none.
+
+## Done well (do not change)
+- No page overflows sideways from 360px to 1920px; 404, Admin and pairing pages look tidy at 360px (screenshots in `shots/`).
+- Modal handling: focus moves to the dialog heading, Tab is trapped, Escape closes, the dialog is named (`aria-labelledby`), scroll is locked and restored.
+- Delete list is confirmed, then offers Undo, and the server state matches the screen after each step.
+- Failure handling on Discover, Catalogs, Lists and Search (network failure) is clear and has Retry buttons; slow loads show "Loading…".
+- All icon-only buttons found have accessible names; no form input without a label on the app pages.
+- One shared token block is reused by every page, and no component CSS contains a hex literal.
+- The cross-tab sign-out reload prevents the old account being used in a stale tab.
+
+## Not audited and why
+- Real Stremio/Nuvio/Wako behaviour, provider connect screens (Trakt, MDBList, TMDB, Simkl) and anything needing real third-party responses: the local server stubs all outbound calls, so lists show empty content. Because of this, item cards with posters, list detail pages and the Watch History views were seen only in empty form.
+- Channel builder wizard (13,000-line file) beyond load, empty state and failure: not driven step by step.
+- `tests/ui-contract.mjs` in the private copy: it failed to start (`ERR_MODULE_NOT_FOUND`, probably because `node_modules` was not copied), so I did not use it as evidence.
+- Admin sub-tabs after login were loaded and checked for overflow, labels and errors at three sizes, but not every admin action was clicked.
+- Pixel-level visual regression and print styles.

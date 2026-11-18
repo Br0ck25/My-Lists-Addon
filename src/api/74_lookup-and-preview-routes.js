@@ -95,6 +95,7 @@ async function apiPreview(request, env, ctx, url, path) {
       reqBody = {};
     }
     testUrl = reqBody.url || "";
+    if (reqBody.validateOnly === true) return previewSourceCheckResponse(testUrl);
     type = reqBody.type === "series" ? "series" : (reqBody.type === "movie" ? "movie" : "mixed");
     tmdbKey = reqBody.tmdbKey || "";
     mdblistKey = reqBody.mdblistKey || "";
@@ -113,7 +114,7 @@ async function apiPreview(request, env, ctx, url, path) {
     previewShuffle = reqBody.shuffle === true;
     previewShuffleId = String(reqBody.shuffleId || "").slice(0, 200);
     sampleSize = Math.max(1, Math.min(PAGE_SIZE, parseInt(reqBody.sample, 10) || 5));
-    skip = Math.max(0, parseInt(reqBody.skip, 10) || 0);
+    skip = Math.min(Math.max(0, parseInt(reqBody.skip, 10) || 0), 9900); // same cap as the catalog rows (audit API-05)
   } else {
     // GET is kept for plain public previews only. Every caller in the
     // builder page uses POST; credentials in the query string are refused
@@ -139,20 +140,21 @@ async function apiPreview(request, env, ctx, url, path) {
     hideNonDigitalReleases = url.searchParams.get("hideNonDigitalReleases") === "1";
     adultContentFilter = url.searchParams.get("adultContentFilter") === "1";
     sampleSize = Math.max(1, Math.min(PAGE_SIZE, parseInt(url.searchParams.get("sample"), 10) || 5));
-    skip = Math.max(0, parseInt(url.searchParams.get("skip"), 10) || 0);
+    skip = Math.min(Math.max(0, parseInt(url.searchParams.get("skip"), 10) || 0), 9900);
   }
   return apiPreviewLoad(request, env, ctx, { url, path, testUrl, type, tmdbKey, mdblistKey, mdblistAccessToken, traktKey, traktAccessToken, simklKey, simklAccessToken, sampleSize, skip, creatorName, creatorKey, hideNonDigitalReleases, adultContentFilter, region, previewShuffle, previewShuffleId });
 }
 
 // The rest of apiPreview, moved unchanged: the same statements in the same order, split only for the 150-line limit.
 async function apiPreviewLoad(request, env, ctx, { url, path, testUrl, type, tmdbKey, mdblistKey, mdblistAccessToken, traktKey, traktAccessToken, simklKey, simklAccessToken, sampleSize, skip, creatorName, creatorKey, hideNonDigitalReleases, adultContentFilter, region, previewShuffle, previewShuffleId }) {
+  region = String(region || "").toUpperCase(); // one cache entry per country, not per spelling, whichever way the request came (GET or POST)
   // Unauthenticated and heavyweight: each call can fan out to TMDB /
   // Trakt / MDBList. Same IP-keyed bucket as create/restore/feedback --
   // 240/minute provides sufficient budget for browsing multi-card
   // Discover shelves while protecting against automated scraping.
   const ip = clientIpKey(request);
   if (!ip) return json({ ok: false, error: "Couldn't load that list." }, 400, { "Cache-Control": "no-store" });
-  if (await consumeRateLimit(env, ctx, "preview", ip, 240)) {
+  if (!isFreeChartPreview(testUrl, skip, { region, keys: [tmdbKey, mdblistKey, mdblistAccessToken, traktKey, traktAccessToken, simklKey, simklAccessToken, creatorName] }) && await consumeRateLimit(env, ctx, "preview", ip, 240)) {
     return json({ ok: false, error: "Couldn't load that list." }, 429, { "Cache-Control": "no-store" });
   }
 

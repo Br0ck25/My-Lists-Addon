@@ -212,24 +212,6 @@ parity("isMyListsNuvioCollectionId", [
   "My-Lists-Collections", " my-lists-collections", "my-lists-collections ", "other-1", "", null, undefined, 0, 123, "xcol_mylists_a",
 ].map((v) => ({ args: [v] })), same("isMyListsNuvioCollectionId"));
 
-const mergeCases = [
-  [null, null], [[], []], [[myLists], []], [[], [myLists]], [[myLists, other], []], [[], [myLists, other]],
-  [[other], [myLists]], [[myLists, other], [{ id: "my-lists-collections", folders: [folderB] }]],
-  [[myLists], [{ id: "my-lists-collections", folders: [{ ...folderA, title: "Action Updated" }] }]],
-  [[myLists], [{ title: "my lists", folders: [folderB] }]], [[myLists], [{ title: "MY LISTS ADDON", folders: [folderB] }]],
-  [[myLists, { id: "dup", title: "My Lists Collections", folders: [folderB] }], [{ id: "n", title: "N", folders: [{ id: "f9", title: "Nine" }] }]],
-  [[other], [{ id: "other-1", title: "Community Pack v2", folders: [] }]],
-  [[other, null, myLists], [{ id: "fresh", title: "Fresh", folders: [{ id: "f3", title: "Three", catalogSources: [{ name: "Z (TV) (Movies)" }] }] }]],
-  [[myLists], [{ id: "f2", title: "drama" }, { id: "f9", name: "Nameonly" }, { title: "" }, null, {}]],
-  [[{ id: "my-lists-addon", title: "Legacy" }], [{ id: "x", folders: [folderA] }]],
-  [[{ id: "keepme", title: "Plain", folders: [] }], [{ title: "Loose", catalogSources: [{ catalogId: "c", name: "C (Series)" }] }]],
-  [JSON.stringify([myLists]), JSON.stringify({ collections: [other] })],
-  [[{ title: "My Lists", folders: [{ name: "Case Test" }] }], [{ id: "x", folders: [{ name: "case test", title: "Changed" }] }]],
-  [[myLists], [{ id: "f", folders: [{ id: "f1", hidden: true, isVisible: false, enabled: false }] }]],
-  [[{ id: "my-lists-collections", folders: "oops" }], [{ id: "x", folders: [folderB] }]],
-];
-parity("mergeNuvioCollections", mergeCases.map((a) => ({ args: a })), { ...same("mergeNuvioCollections"), norm: (v) => maskIds(plain(v)) });
-
 const addCases = [
   [null, null], [[myLists], null], [[myLists, other], []], [[], [other]], [[myLists], [other]],
   [[myLists], [{ id: "my-lists-collections", title: "Dup id", folders: [folderB] }]],

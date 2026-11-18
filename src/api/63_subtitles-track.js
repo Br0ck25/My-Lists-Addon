@@ -150,7 +150,9 @@ async function handleSubtitlesTrackFor(configParam, stremioType, id, env, reques
 
 // The try block of handleSubtitlesTrackFor: look the play up, record it, take it off the Watchlist.
 async function recordSubtitlesPlay(env, ctx, auth, stremioType, imdbId, season, episode, effectiveTmdbKey) {
-  await ensureTrackingMigrated(env, auth.username);
+  // Asking for the tracking key of an account on the activity database rebuilds its
+  // whole history (PERF-01), so a directly recorded play (41_direct-play.js) skips it.
+  if ((await directPlayAccount(env, auth.username)) == null) await ensureTrackingMigrated(env, auth.username);
   const syncKey = `creatorsynctracking:${auth.username}`;
 
   // Resolve what we're actually recording (TMDB lookups) exactly
@@ -329,6 +331,8 @@ async function resolveSubtitlesPlayRecord(stremioType, imdbId, season, episode, 
 
 // The read-modify-write of the account's tracking blob, retried a bounded number of times.
 async function writeSubtitlesPlayRecord(env, { auth, syncKey, imdbId, season, episode, effectiveTmdbKey, recordEpisode, recordMovie }) {
+  const direct = await directPlayLoad(env, auth.username);
+  if (direct) return writeSubtitlesPlayDirect(env, direct, { auth, imdbId, season, episode, effectiveTmdbKey, recordEpisode, recordMovie });
   const MAX_ATTEMPTS = 3;
   for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
     let blob = null;
@@ -392,6 +396,26 @@ async function writeSubtitlesPlayRecord(env, { auth, syncKey, imdbId, season, ep
 
     break;
   }
+}
+
+// The same play, recorded directly (FF_DIRECT_PLAY, 41_direct-play.js): the same
+// next-episode code, on a record holding only this show's furthest watched episode,
+// then the play and the record's other changes written without touching the rest of
+// the history. No retry loop: nothing is read-compared-and-rewritten as a whole.
+async function writeSubtitlesPlayDirect(env, direct, { auth, imdbId, season, episode, effectiveTmdbKey, recordEpisode, recordMovie }) {
+  const blob = direct.blob;
+  if (recordEpisode) {
+    const { showTitle, showPoster } = recordEpisode.episodeEntry;
+    blob.watchHistory = await directPlayShowHistory(env, direct, { showId: imdbId, showTitle, showPoster, season, episode });
+    await applyEpisodePlayToBlob(blob, recordEpisode, imdbId, season, episode, effectiveTmdbKey, env);
+  } else if (recordMovie) {
+    blob.watchHistory = [{ ...recordMovie.movieEntry, watchedAt: Date.now() }];
+  }
+  if (Array.isArray(blob.watchlist) && blob.watchlist.length) {
+    blob.watchlist = blob.watchlist.filter((it) => it && String(it.id || it.imdbId) !== imdbId && String(it.showId || '') !== imdbId);
+  }
+  blob.updatedAt = Date.now();
+  await directPlayCommit(env, auth.username, direct, blob, "ping");
 }
 
 // Put an episode play into the blob's Watch History and recompute that show's Continue Watching.

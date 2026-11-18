@@ -4032,14 +4032,7 @@ function validateAddShelfModal() {
 }
 
 function onAddShelfModalLinkInput(inputEl) {
-  const link = inputEl.value.trim().toLowerCase();
-  const typeSelect = document.getElementById('addShelfModalType');
-  // Only auto-switch type if it's the first input or type is currently 'movie' and we detect a show
-  if (link.includes('type=show') || link.includes('shows') || link.includes('series') || link.includes('tv')) {
-    typeSelect.value = 'series';
-  } else if (link.includes('movie') && typeSelect.value === 'series' && document.querySelectorAll('.addShelfModalLinkInput').length === 1) {
-    typeSelect.value = 'movie';
-  }
+  guessShelfTypeFromLink(inputEl.value, document.getElementById('addShelfModalType'));
 }
 
 function submitAddShelfModal() {
@@ -4047,15 +4040,7 @@ function submitAddShelfModal() {
   const links = Array.from(document.querySelectorAll('.addShelfModalLinkInput')).map(el => el.value.trim()).filter(Boolean);
   const type = document.getElementById('addShelfModalType').value;
   if (!name || links.length === 0) return;
-  
-  if (links.length === 1) {
-    addRow(name, links[0], type, true, 'Custom');
-  } else {
-    addCombinedRow(name, links, type, 'Custom');
-  }
-  
-  document.getElementById('addShelfModal').style.display = 'none';
-  saveState();
+  submitAddShelfChecked(name, links, type);
 }
 
 function addRow(name, url, type, enabled, group, channelId, noShuffle) {

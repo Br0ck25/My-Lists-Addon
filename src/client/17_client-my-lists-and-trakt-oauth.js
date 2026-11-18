@@ -208,6 +208,128 @@ function openMdblistAiringNextDetailsPage() {
   openListDetailsPage('MDBList Airing Next', 'series', 'mdblist:user:shows:airing-next', { sample: sample, count: sample.length, maybeMore: false });
 }
 
+// Fills a provider list's Airing Next items from that provider's cached episode
+// info in localStorage (cacheKey, e.g. 'mdblistAiringNextCache') and from the local
+// Airing Next list. Runs once per list (CQ-03: was pasted into three renderers).
+function applyAiringNextCache(airingNextList, cacheKey) {
+  const localAiringList = (typeof loadLocalCustomLists === 'function') ? ((loadLocalCustomLists()['airing-next'] || {}).items || []) : [];
+  if (!airingNextList._cachedApplied) {
+    try {
+      const cached = JSON.parse(localStorage.getItem('myListAddon:' + cacheKey) || '[]');
+      if (Array.isArray(cached) && cached.length) {
+        const cacheMap = new Map(cached.map((c) => [c.id || c.imdbId || (c.tmdbId ? 'tmdb:' + c.tmdbId : ''), c]));
+        airingNextList.items.forEach((it) => {
+          const c = cacheMap.get(it.id || it.imdbId || (it.tmdbId ? 'tmdb:' + it.tmdbId : ''));
+          const localMatch = localAiringList.find((a) => a && (a.showId === it.id || a.showId === it.imdbId || (it.tmdbId && a.showId === 'tmdb:' + it.tmdbId)));
+          if (c) {
+            it.airDate = c.airDate;
+            it.seasonNum = c.seasonNum;
+            it.episodeNum = c.episodeNum;
+            it.isSeasonPremiere = (typeof c.isSeasonPremiere === 'boolean') ? c.isSeasonPremiere : (localMatch ? localMatch.isSeasonPremiere : (c.episodeNum === 1));
+            it.isSeasonFinale = !!(c.isSeasonFinale || (localMatch && localMatch.isSeasonFinale));
+            it.seasonFinaleAirDate = c.seasonFinaleAirDate || (localMatch && localMatch.seasonFinaleAirDate) || null;
+            it.seasonFinaleEpisodeNumber = c.seasonFinaleEpisodeNumber || null;
+            it.isUnaired = true;
+            it.episodeTitle = c.episodeTitle || (it.isSeasonPremiere ? 'Season Premiere' : (it.isSeasonFinale ? 'Season Finale' : (c.episodeNum != null ? ('Episode ' + c.episodeNum) : '')));
+          } else if (localMatch) {
+            it.isSeasonPremiere = !!localMatch.isSeasonPremiere;
+            it.isSeasonFinale = !!localMatch.isSeasonFinale;
+            it.seasonFinaleAirDate = localMatch.seasonFinaleAirDate || null;
+          }
+        });
+      } else if (localAiringList.length) {
+        airingNextList.items.forEach((it) => {
+          const localMatch = localAiringList.find((a) => a && (a.showId === it.id || a.showId === it.imdbId || (it.tmdbId && a.showId === 'tmdb:' + it.tmdbId)));
+          if (localMatch) {
+            it.isSeasonPremiere = !!localMatch.isSeasonPremiere;
+            it.isSeasonFinale = !!localMatch.isSeasonFinale;
+            it.seasonFinaleAirDate = localMatch.seasonFinaleAirDate || null;
+          }
+        });
+      }
+    } catch (e) {}
+    airingNextList._cachedApplied = true;
+  }
+}
+
+// Air-date and premiere/finale badges for an Up Next / Continue Watching poster
+// tile. Falls back to the matching Airing Next entry (findAiringMatchFor) when
+// the item has no air date. sectionSettingKey is the panel's own badge toggle.
+// Shared by the MDBList and Trakt panels (audit CQ-03).
+function upNextTileBadgesHtml(it, sectionSettingKey) {
+  const showSectionBadges = typeof getBadgeSetting === 'function' ? getBadgeSetting(sectionSettingKey) : true;
+  const showAirDate = showSectionBadges && (typeof getBadgeSetting === 'function' ? getBadgeSetting('showBadgeAirDate') : true);
+  const showPremiere = showSectionBadges && (typeof getBadgeSetting === 'function' ? getBadgeSetting('showBadgeSeasonPremiere') : true);
+  const showFinale = showSectionBadges && (typeof getBadgeSetting === 'function' ? getBadgeSetting('showBadgeSeasonFinale') : true);
+  const showFinaleDate = showSectionBadges && (typeof getBadgeSetting === 'function' ? getBadgeSetting('showBadgeSeasonFinaleDate') : true);
+
+  const airingMatch = typeof findAiringMatchFor === 'function' ? findAiringMatchFor(it) : null;
+  const effectiveAirDate = it.airDate || (airingMatch ? airingMatch.airDate : '');
+  const hasAired = effectiveAirDate && typeof isEpisodeAired === 'function' ? isEpisodeAired(effectiveAirDate) : false;
+  const isUnairedEp = effectiveAirDate ? !hasAired : !!(it.isUnaired || (airingMatch && airingMatch.isUnaired));
+  let dateBadge = '';
+  if (showAirDate && effectiveAirDate && !hasAired && typeof isEpisodeAired === 'function') {
+    dateBadge = typeof watchItemAirDateBadgeHtml === 'function' ? watchItemAirDateBadgeHtml({
+      airDate: effectiveAirDate,
+      airTime: it.airTime || (airingMatch && airingMatch.airTime) || '',
+      showId: it.showId || it.id,
+      seasonNum: it.seasonNum,
+      episodeNum: it.episodeNum
+    }) : '';
+  }
+  const isSeasonPremiere = (typeof it.isSeasonPremiere === 'boolean') ? it.isSeasonPremiere : (airingMatch ? airingMatch.isSeasonPremiere : (it.episodeNum === 1));
+  const isSeasonFinale = !!(it.isSeasonFinale || (airingMatch && airingMatch.isSeasonFinale));
+  const seasonFinaleAirDate = it.seasonFinaleAirDate || (airingMatch ? (airingMatch.seasonFinaleAirDate || (airingMatch.isSeasonFinale ? airingMatch.airDate : null)) : null);
+  const isFinaleUnaired = seasonFinaleAirDate && typeof isEpisodeAired === 'function' ? !isEpisodeAired(seasonFinaleAirDate) : !!seasonFinaleAirDate;
+  let bottomBadge = '';
+  if (isUnairedEp) {
+    if (showPremiere && isSeasonPremiere) {
+      bottomBadge = '<div class="cw-date-badge cw-date-badge-premiere" title="Airs on ' + escapeAttr(effectiveAirDate || '') + '">Season Premiere</div>';
+    } else if (showFinale && isSeasonFinale) {
+      bottomBadge = '<div class="cw-date-badge cw-date-badge-finale" title="Airs on ' + escapeAttr(effectiveAirDate || '') + '">Season Finale</div>';
+    } else if (showFinaleDate && seasonFinaleAirDate && isFinaleUnaired) {
+      const finaleText = typeof formatAirDateBadge === 'function' ? formatAirDateBadge(seasonFinaleAirDate) : '';
+      if (finaleText) {
+        bottomBadge = '<div class="cw-date-badge cw-date-badge-finale-date" title="Season finale airs on ' + escapeAttr(seasonFinaleAirDate) + '">Finale: ' + escapeHtml(finaleText) + '</div>';
+      }
+    }
+  }
+  return dateBadge + bottomBadge;
+}
+
+// Air-date and premiere/finale badges for an Airing Next poster tile.
+// Shared by the MDBList, Trakt and Simkl panels (audit CQ-03).
+function airingNextTileBadgesHtml(it) {
+  const showAiringBadges = typeof getBadgeSetting === 'function' ? getBadgeSetting('showBadgesAiringNext') : true;
+  const showAirDate = showAiringBadges && (typeof getBadgeSetting === 'function' ? getBadgeSetting('showBadgeAirDate') : true);
+  const showPremiere = showAiringBadges && (typeof getBadgeSetting === 'function' ? getBadgeSetting('showBadgeSeasonPremiere') : true);
+  const showFinale = showAiringBadges && (typeof getBadgeSetting === 'function' ? getBadgeSetting('showBadgeSeasonFinale') : true);
+  const showFinaleDate = showAiringBadges && (typeof getBadgeSetting === 'function' ? getBadgeSetting('showBadgeSeasonFinaleDate') : true);
+
+  const hasAired = it.airDate && typeof isEpisodeAired === 'function' ? isEpisodeAired(it.airDate) : false;
+  const isUnairedEp = it.airDate ? !hasAired : !!it.isUnaired;
+  let dateBadge = '';
+  if (showAirDate && it.airDate && !hasAired && typeof isEpisodeAired === 'function') {
+    dateBadge = typeof watchItemAirDateBadgeHtml === 'function' ? watchItemAirDateBadgeHtml(it) : '';
+  }
+  const isSeasonPremiere = (it.episodeNum === 1 || (it.episodeNum == null && it.isSeasonPremiere));
+  const isFinaleUnaired = it.seasonFinaleAirDate && typeof isEpisodeAired === 'function' ? !isEpisodeAired(it.seasonFinaleAirDate) : !!it.seasonFinaleAirDate;
+  let bottomBadge = '';
+  if (isUnairedEp) {
+    if (showPremiere && isSeasonPremiere) {
+      bottomBadge = '<div class="cw-date-badge cw-date-badge-premiere" title="Airs on ' + escapeAttr(it.airDate || '') + '">Season Premiere</div>';
+    } else if (showFinale && it.isSeasonFinale) {
+      bottomBadge = '<div class="cw-date-badge cw-date-badge-finale" title="Airs on ' + escapeAttr(it.airDate || '') + '">Season Finale</div>';
+    } else if (showFinaleDate && it.seasonFinaleAirDate && isFinaleUnaired) {
+      const finaleText = typeof formatAirDateBadge === 'function' ? formatAirDateBadge(it.seasonFinaleAirDate) : '';
+      if (finaleText) {
+        bottomBadge = '<div class="cw-date-badge cw-date-badge-finale-date" title="Season finale airs on ' + escapeAttr(it.seasonFinaleAirDate) + '">Finale: ' + escapeHtml(finaleText) + '</div>';
+      }
+    }
+  }
+  return dateBadge + bottomBadge;
+}
+
 // Renders the list cards into #myMdblistListsResult once /api/mdblist-my-lists
 // returns.
 function renderMyMdblistLists(lists) {
@@ -223,44 +345,7 @@ function renderMyMdblistLists(lists) {
     if (!window._mdblistRawAiringCandidates || !window._mdblistRawAiringCandidates.length) {
       window._mdblistRawAiringCandidates = airingNextList.items.map(it => ({ ...it }));
     }
-    const localAiringList = (typeof loadLocalCustomLists === 'function') ? ((loadLocalCustomLists()['airing-next'] || {}).items || []) : [];
-    if (!airingNextList._cachedApplied) {
-      try {
-        const cached = JSON.parse(localStorage.getItem('myListAddon:mdblistAiringNextCache') || '[]');
-        if (Array.isArray(cached) && cached.length) {
-          const cacheMap = new Map(cached.map((c) => [c.id || c.imdbId || (c.tmdbId ? 'tmdb:' + c.tmdbId : ''), c]));
-          airingNextList.items.forEach((it) => {
-            const c = cacheMap.get(it.id || it.imdbId || (it.tmdbId ? 'tmdb:' + it.tmdbId : ''));
-            const localMatch = localAiringList.find((a) => a && (a.showId === it.id || a.showId === it.imdbId || (it.tmdbId && a.showId === 'tmdb:' + it.tmdbId)));
-            if (c) {
-              it.airDate = c.airDate;
-              it.seasonNum = c.seasonNum;
-              it.episodeNum = c.episodeNum;
-              it.isSeasonPremiere = (typeof c.isSeasonPremiere === 'boolean') ? c.isSeasonPremiere : (localMatch ? localMatch.isSeasonPremiere : (c.episodeNum === 1));
-              it.isSeasonFinale = !!(c.isSeasonFinale || (localMatch && localMatch.isSeasonFinale));
-              it.seasonFinaleAirDate = c.seasonFinaleAirDate || (localMatch && localMatch.seasonFinaleAirDate) || null;
-              it.seasonFinaleEpisodeNumber = c.seasonFinaleEpisodeNumber || null;
-              it.isUnaired = true;
-              it.episodeTitle = c.episodeTitle || (it.isSeasonPremiere ? 'Season Premiere' : (it.isSeasonFinale ? 'Season Finale' : (c.episodeNum != null ? ('Episode ' + c.episodeNum) : '')));
-            } else if (localMatch) {
-              it.isSeasonPremiere = !!localMatch.isSeasonPremiere;
-              it.isSeasonFinale = !!localMatch.isSeasonFinale;
-              it.seasonFinaleAirDate = localMatch.seasonFinaleAirDate || null;
-            }
-          });
-        } else if (localAiringList.length) {
-          airingNextList.items.forEach((it) => {
-            const localMatch = localAiringList.find((a) => a && (a.showId === it.id || a.showId === it.imdbId || (it.tmdbId && a.showId === 'tmdb:' + it.tmdbId)));
-            if (localMatch) {
-              it.isSeasonPremiere = !!localMatch.isSeasonPremiere;
-              it.isSeasonFinale = !!localMatch.isSeasonFinale;
-              it.seasonFinaleAirDate = localMatch.seasonFinaleAirDate || null;
-            }
-          });
-        }
-      } catch (e) {}
-      airingNextList._cachedApplied = true;
-    }
+    applyAiringNextCache(airingNextList, 'mdblistAiringNextCache');
     const hasExpired = (airingNextList.items || []).some((it) => it && it.airDate && typeof isEpisodeAired === 'function' && isEpisodeAired(it.airDate));
     if (!_mdblistAiringNextEnriching && (hasExpired || !_mdblistAiringNextEnrichedAt || Date.now() - _mdblistAiringNextEnrichedAt >= 120000)) {
       enrichMdblistAiringNextDates(airingNextList).catch(() => {});
@@ -327,44 +412,6 @@ function renderMyMdblistLists(lists) {
             if (isMobileEnd) overlays += '<div class="list-card-count-overlay mobile-only u-cur-pointer" data-act="openMdblistUpNextDetailsPage" data-act-stop>' + totalCount + ' &rsaquo;</div>';
             if (isDesktopEnd) overlays += '<div class="list-card-count-overlay desktop-only u-cur-pointer" data-act="openMdblistUpNextDetailsPage" data-act-stop>' + totalCount + ' &rsaquo;</div>';
 
-            const showMdbUpNextBadges = typeof getBadgeSetting === 'function' ? getBadgeSetting('showBadgesMdblistUpNext') : true;
-            const showAirDate = showMdbUpNextBadges && (typeof getBadgeSetting === 'function' ? getBadgeSetting('showBadgeAirDate') : true);
-            const showPremiere = showMdbUpNextBadges && (typeof getBadgeSetting === 'function' ? getBadgeSetting('showBadgeSeasonPremiere') : true);
-            const showFinale = showMdbUpNextBadges && (typeof getBadgeSetting === 'function' ? getBadgeSetting('showBadgeSeasonFinale') : true);
-            const showFinaleDate = showMdbUpNextBadges && (typeof getBadgeSetting === 'function' ? getBadgeSetting('showBadgeSeasonFinaleDate') : true);
-
-            const airingMatch = typeof findAiringMatchFor === 'function' ? findAiringMatchFor(it) : null;
-            const effectiveAirDate = it.airDate || (airingMatch ? airingMatch.airDate : '');
-            const hasAired = effectiveAirDate && typeof isEpisodeAired === 'function' ? isEpisodeAired(effectiveAirDate) : false;
-            const isUnairedEp = effectiveAirDate ? !hasAired : !!(it.isUnaired || (airingMatch && airingMatch.isUnaired));
-            let dateBadge = '';
-            if (showAirDate && effectiveAirDate && !hasAired && typeof isEpisodeAired === 'function') {
-              dateBadge = typeof watchItemAirDateBadgeHtml === 'function' ? watchItemAirDateBadgeHtml({
-                airDate: effectiveAirDate,
-                airTime: it.airTime || (airingMatch && airingMatch.airTime) || '',
-                showId: it.showId || it.id,
-                seasonNum: it.seasonNum,
-                episodeNum: it.episodeNum
-              }) : '';
-            }
-            const isSeasonPremiere = (typeof it.isSeasonPremiere === 'boolean') ? it.isSeasonPremiere : (airingMatch ? airingMatch.isSeasonPremiere : (it.episodeNum === 1));
-            const isSeasonFinale = !!(it.isSeasonFinale || (airingMatch && airingMatch.isSeasonFinale));
-            const seasonFinaleAirDate = it.seasonFinaleAirDate || (airingMatch ? (airingMatch.seasonFinaleAirDate || (airingMatch.isSeasonFinale ? airingMatch.airDate : null)) : null);
-            const isFinaleUnaired = seasonFinaleAirDate && typeof isEpisodeAired === 'function' ? !isEpisodeAired(seasonFinaleAirDate) : !!seasonFinaleAirDate;
-            let bottomBadge = '';
-            if (isUnairedEp) {
-              if (showPremiere && isSeasonPremiere) {
-                bottomBadge = '<div class="cw-date-badge cw-date-badge-premiere" title="Airs on ' + escapeAttr(effectiveAirDate || '') + '">Season Premiere</div>';
-              } else if (showFinale && isSeasonFinale) {
-                bottomBadge = '<div class="cw-date-badge cw-date-badge-finale" title="Airs on ' + escapeAttr(effectiveAirDate || '') + '">Season Finale</div>';
-              } else if (showFinaleDate && seasonFinaleAirDate && isFinaleUnaired) {
-                const finaleText = typeof formatAirDateBadge === 'function' ? formatAirDateBadge(seasonFinaleAirDate) : '';
-                if (finaleText) {
-                  bottomBadge = '<div class="cw-date-badge cw-date-badge-finale-date" title="Season finale airs on ' + escapeAttr(seasonFinaleAirDate) + '">Finale: ' + escapeHtml(finaleText) + '</div>';
-                }
-              }
-            }
-
             const poster = resolveListCardItemPoster(it);
             const epSubtitle = it.episodeTitle || (it.seasonNum != null && it.episodeNum != null ? ('S' + it.seasonNum + 'E' + it.episodeNum) : '');
 
@@ -372,7 +419,7 @@ function renderMyMdblistLists(lists) {
             return '<div class="list-card-mini-poster-tile mdblist-up-next-tile" data-name="' + escapeAttr(l.name) + '" data-url="' + escapeAttr(l.url) + '" data-type="series">' +
               '<div class="list-card-mini-poster-img-wrap">' +
                 (poster ? '<img src="' + escapeAttr(poster) + '" class="clickable-poster" data-id="' + escapeAttr(it.id) + '" data-type="series" data-title="' + escapeAttr(it.name || '') + '" data-poster="' + escapeAttr(poster || '') + '" data-imdb="' + escapeAttr(it.imdbId || it.id || '') + '" alt="" loading="lazy" data-act="handlePosterImgError" data-act-args="[&quot;@self&quot;]">' : '<div class="live-preview-poster live-preview-poster-placeholder u-bg-v_color_bg_sunken" data-needs-fallback="1" style="width:100%; height:100%;"><small class="u-c-v_muted u-fs-v_font_size_xs">No poster</small></div>') +
-                (dateBadge + bottomBadge) +
+                upNextTileBadgesHtml(it, 'showBadgesMdblistUpNext') +
                 mdbUpNextRemoveBtn +
                 overlays +
               '</div>' +
@@ -395,33 +442,6 @@ function renderMyMdblistLists(lists) {
             if (isMobileEnd) overlays += '<div class="list-card-count-overlay mobile-only u-cur-pointer" data-act="openMdblistAiringNextDetailsPage" data-act-stop>' + totalCount + ' &rsaquo;</div>';
             if (isDesktopEnd) overlays += '<div class="list-card-count-overlay desktop-only u-cur-pointer" data-act="openMdblistAiringNextDetailsPage" data-act-stop>' + totalCount + ' &rsaquo;</div>';
 
-            const showAiringBadges = typeof getBadgeSetting === 'function' ? getBadgeSetting('showBadgesAiringNext') : true;
-            const showAirDate = showAiringBadges && (typeof getBadgeSetting === 'function' ? getBadgeSetting('showBadgeAirDate') : true);
-            const showPremiere = showAiringBadges && (typeof getBadgeSetting === 'function' ? getBadgeSetting('showBadgeSeasonPremiere') : true);
-            const showFinale = showAiringBadges && (typeof getBadgeSetting === 'function' ? getBadgeSetting('showBadgeSeasonFinale') : true);
-            const showFinaleDate = showAiringBadges && (typeof getBadgeSetting === 'function' ? getBadgeSetting('showBadgeSeasonFinaleDate') : true);
-
-            const hasAired = it.airDate && typeof isEpisodeAired === 'function' ? isEpisodeAired(it.airDate) : false;
-            const isUnairedEp = it.airDate ? !hasAired : !!it.isUnaired;
-            let dateBadge = '';
-            if (showAirDate && it.airDate && !hasAired && typeof isEpisodeAired === 'function') {
-              dateBadge = typeof watchItemAirDateBadgeHtml === 'function' ? watchItemAirDateBadgeHtml(it) : '';
-            }
-            const isSeasonPremiere = (it.episodeNum === 1 || (it.episodeNum == null && it.isSeasonPremiere));
-            const isFinaleUnaired = it.seasonFinaleAirDate && typeof isEpisodeAired === 'function' ? !isEpisodeAired(it.seasonFinaleAirDate) : !!it.seasonFinaleAirDate;
-            let bottomBadge = '';
-            if (isUnairedEp) {
-              if (showPremiere && isSeasonPremiere) {
-                bottomBadge = '<div class="cw-date-badge cw-date-badge-premiere" title="Airs on ' + escapeAttr(it.airDate || '') + '">Season Premiere</div>';
-              } else if (showFinale && it.isSeasonFinale) {
-                bottomBadge = '<div class="cw-date-badge cw-date-badge-finale" title="Airs on ' + escapeAttr(it.airDate || '') + '">Season Finale</div>';
-              } else if (showFinaleDate && it.seasonFinaleAirDate && isFinaleUnaired) {
-                const finaleText = typeof formatAirDateBadge === 'function' ? formatAirDateBadge(it.seasonFinaleAirDate) : '';
-                if (finaleText) {
-                  bottomBadge = '<div class="cw-date-badge cw-date-badge-finale-date" title="Season finale airs on ' + escapeAttr(it.seasonFinaleAirDate) + '">Finale: ' + escapeHtml(finaleText) + '</div>';
-                }
-              }
-            }
             const label = (typeof formatWatchItemLabel === 'function')
               ? formatWatchItemLabel({ showTitle: it.name, seasonNum: it.seasonNum, episodeNum: it.episodeNum, title: it.episodeTitle || '', isSeasonPremiere: it.isSeasonPremiere })
               : {
@@ -434,7 +454,7 @@ function renderMyMdblistLists(lists) {
             return '<div class="list-card-mini-poster-tile" data-name="' + escapeAttr(l.name) + '" data-url="' + escapeAttr(l.url) + '" data-type="' + escapeAttr(type) + '">' +
               '<div class="list-card-mini-poster-img-wrap">' +
                 (poster ? '<img src="' + escapeAttr(poster) + '" class="clickable-poster" data-id="' + escapeAttr(it.id) + '" data-type="' + escapeAttr(it.type || type) + '" data-title="' + escapeAttr(it.name || '') + '" data-poster="' + escapeAttr(poster || '') + '" data-imdb="' + escapeAttr(it.imdbId || it.id || '') + '" alt="" loading="lazy" data-act="handlePosterImgError" data-act-args="[&quot;@self&quot;]">' : '<div class="live-preview-poster live-preview-poster-placeholder u-bg-v_color_bg_sunken" data-needs-fallback="1" style="width:100%; height:100%;"><small class="u-c-v_muted u-fs-v_font_size_xs">No poster</small></div>') +
-                (dateBadge + bottomBadge) +
+                airingNextTileBadgesHtml(it) +
                 mdbAiringNextRemoveBtn +
                 overlays +
               '</div>' +
@@ -857,10 +877,10 @@ function pickUpTraktTokenFromUrl() {
       token_exchange_failed: 'Failed to exchange authorization code for a Trakt token.',
       access_denied: 'Trakt sign-in was cancelled.',
     };
-    const isRateLimit = detail.includes('1015') || detail.includes('429') || err === 'exchange_failed';
-    const msg = isRateLimit 
+    const isRateLimit = detail.includes('1015') || detail.includes('429'); // never echo err/detail: the address bar is untrusted
+    const msg = isRateLimit
       ? 'Trakt web redirect was rate-limited by Cloudflare (1015). Opening direct PIN code activation instead…'
-      : (messages[err] || ('Could not connect to Trakt (' + err + (detail ? ': ' + detail : '') + ').'));
+      : (Object.prototype.hasOwnProperty.call(messages, err) ? messages[err] : 'Could not connect to Trakt.');
 
     if (typeof showAppAlert === 'function') {
       showAppAlert('Trakt Connection', msg, !isRateLimit);
@@ -1222,44 +1242,7 @@ function renderMyPrivateTraktLists(lists) {
     if (!window._traktRawAiringCandidates || !window._traktRawAiringCandidates.length) {
       window._traktRawAiringCandidates = airingNextList.items.map(it => ({ ...it }));
     }
-    const localAiringList = (typeof loadLocalCustomLists === 'function') ? ((loadLocalCustomLists()['airing-next'] || {}).items || []) : [];
-    if (!airingNextList._cachedApplied) {
-      try {
-        const cached = JSON.parse(localStorage.getItem('myListAddon:traktAiringNextCache') || '[]');
-        if (Array.isArray(cached) && cached.length) {
-          const cacheMap = new Map(cached.map((c) => [c.id || c.imdbId || (c.tmdbId ? 'tmdb:' + c.tmdbId : ''), c]));
-          airingNextList.items.forEach((it) => {
-            const c = cacheMap.get(it.id || it.imdbId || (it.tmdbId ? 'tmdb:' + it.tmdbId : ''));
-            const localMatch = localAiringList.find((a) => a && (a.showId === it.id || a.showId === it.imdbId || (it.tmdbId && a.showId === 'tmdb:' + it.tmdbId)));
-            if (c) {
-              it.airDate = c.airDate;
-              it.seasonNum = c.seasonNum;
-              it.episodeNum = c.episodeNum;
-              it.isSeasonPremiere = (typeof c.isSeasonPremiere === 'boolean') ? c.isSeasonPremiere : (localMatch ? localMatch.isSeasonPremiere : (c.episodeNum === 1));
-              it.isSeasonFinale = !!(c.isSeasonFinale || (localMatch && localMatch.isSeasonFinale));
-              it.seasonFinaleAirDate = c.seasonFinaleAirDate || (localMatch && localMatch.seasonFinaleAirDate) || null;
-              it.seasonFinaleEpisodeNumber = c.seasonFinaleEpisodeNumber || null;
-              it.isUnaired = true;
-              it.episodeTitle = c.episodeTitle || (it.isSeasonPremiere ? 'Season Premiere' : (it.isSeasonFinale ? 'Season Finale' : (c.episodeNum != null ? ('Episode ' + c.episodeNum) : '')));
-            } else if (localMatch) {
-              it.isSeasonPremiere = !!localMatch.isSeasonPremiere;
-              it.isSeasonFinale = !!localMatch.isSeasonFinale;
-              it.seasonFinaleAirDate = localMatch.seasonFinaleAirDate || null;
-            }
-          });
-        } else if (localAiringList.length) {
-          airingNextList.items.forEach((it) => {
-            const localMatch = localAiringList.find((a) => a && (a.showId === it.id || a.showId === it.imdbId || (it.tmdbId && a.showId === 'tmdb:' + it.tmdbId)));
-            if (localMatch) {
-              it.isSeasonPremiere = !!localMatch.isSeasonPremiere;
-              it.isSeasonFinale = !!localMatch.isSeasonFinale;
-              it.seasonFinaleAirDate = localMatch.seasonFinaleAirDate || null;
-            }
-          });
-        }
-      } catch (e) {}
-      airingNextList._cachedApplied = true;
-    }
+    applyAiringNextCache(airingNextList, 'traktAiringNextCache');
     const hasExpired = (airingNextList.items || []).some((it) => it && it.airDate && typeof isEpisodeAired === 'function' && isEpisodeAired(it.airDate));
     if (!_traktAiringNextEnriching && (hasExpired || !_traktAiringNextEnrichedAt || Date.now() - _traktAiringNextEnrichedAt >= 120000)) {
       enrichTraktAiringNextDates(airingNextList).catch(() => {});
@@ -1327,44 +1310,6 @@ function renderMyPrivateTraktLists(lists) {
             if (isMobileEnd) overlays += '<div class="list-card-count-overlay mobile-only u-cur-pointer" data-act="openTraktContinueWatchingDetailsPage" data-act-stop>' + totalCount + ' &rsaquo;</div>';
             if (isDesktopEnd) overlays += '<div class="list-card-count-overlay desktop-only u-cur-pointer" data-act="openTraktContinueWatchingDetailsPage" data-act-stop>' + totalCount + ' &rsaquo;</div>';
 
-            const showTraktCwBadges = typeof getBadgeSetting === 'function' ? getBadgeSetting('showBadgesTraktContinueWatching') : true;
-            const showAirDate = showTraktCwBadges && (typeof getBadgeSetting === 'function' ? getBadgeSetting('showBadgeAirDate') : true);
-            const showPremiere = showTraktCwBadges && (typeof getBadgeSetting === 'function' ? getBadgeSetting('showBadgeSeasonPremiere') : true);
-            const showFinale = showTraktCwBadges && (typeof getBadgeSetting === 'function' ? getBadgeSetting('showBadgeSeasonFinale') : true);
-            const showFinaleDate = showTraktCwBadges && (typeof getBadgeSetting === 'function' ? getBadgeSetting('showBadgeSeasonFinaleDate') : true);
-
-            const airingMatch = typeof findAiringMatchFor === 'function' ? findAiringMatchFor(it) : null;
-            const effectiveAirDate = it.airDate || (airingMatch ? airingMatch.airDate : '');
-            const hasAired = effectiveAirDate && typeof isEpisodeAired === 'function' ? isEpisodeAired(effectiveAirDate) : false;
-            const isUnairedEp = effectiveAirDate ? !hasAired : !!(it.isUnaired || (airingMatch && airingMatch.isUnaired));
-            let dateBadge = '';
-            if (showAirDate && effectiveAirDate && !hasAired && typeof isEpisodeAired === 'function') {
-              dateBadge = typeof watchItemAirDateBadgeHtml === 'function' ? watchItemAirDateBadgeHtml({
-                airDate: effectiveAirDate,
-                airTime: it.airTime || (airingMatch && airingMatch.airTime) || '',
-                showId: it.showId || it.id,
-                seasonNum: it.seasonNum,
-                episodeNum: it.episodeNum
-              }) : '';
-            }
-            const isSeasonPremiere = (typeof it.isSeasonPremiere === 'boolean') ? it.isSeasonPremiere : (airingMatch ? airingMatch.isSeasonPremiere : (it.episodeNum === 1));
-            const isSeasonFinale = !!(it.isSeasonFinale || (airingMatch && airingMatch.isSeasonFinale));
-            const seasonFinaleAirDate = it.seasonFinaleAirDate || (airingMatch ? (airingMatch.seasonFinaleAirDate || (airingMatch.isSeasonFinale ? airingMatch.airDate : null)) : null);
-            const isFinaleUnaired = seasonFinaleAirDate && typeof isEpisodeAired === 'function' ? !isEpisodeAired(seasonFinaleAirDate) : !!seasonFinaleAirDate;
-            let bottomBadge = '';
-            if (isUnairedEp) {
-              if (showPremiere && isSeasonPremiere) {
-                bottomBadge = '<div class="cw-date-badge cw-date-badge-premiere" title="Airs on ' + escapeAttr(effectiveAirDate || '') + '">Season Premiere</div>';
-              } else if (showFinale && isSeasonFinale) {
-                bottomBadge = '<div class="cw-date-badge cw-date-badge-finale" title="Airs on ' + escapeAttr(effectiveAirDate || '') + '">Season Finale</div>';
-              } else if (showFinaleDate && seasonFinaleAirDate && isFinaleUnaired) {
-                const finaleText = typeof formatAirDateBadge === 'function' ? formatAirDateBadge(seasonFinaleAirDate) : '';
-                if (finaleText) {
-                  bottomBadge = '<div class="cw-date-badge cw-date-badge-finale-date" title="Season finale airs on ' + escapeAttr(seasonFinaleAirDate) + '">Finale: ' + escapeHtml(finaleText) + '</div>';
-                }
-              }
-            }
-
             const traktPoster = resolveListCardItemPoster(it);
             const progPercent = Math.min(100, Math.max(0, it.progress || 0));
             const progressOverlay = progPercent > 0
@@ -1377,7 +1322,7 @@ function renderMyPrivateTraktLists(lists) {
               '<div class="list-card-mini-poster-img-wrap">' +
                 (traktPoster ? '<img src="' + escapeAttr(traktPoster) + '" class="clickable-poster" data-id="' + escapeAttr(it.id) + '" data-type="' + escapeAttr(it.type || 'series') + '" data-title="' + escapeAttr(it.name || '') + '" data-poster="' + escapeAttr(traktPoster || '') + '" data-imdb="' + escapeAttr(it.imdbId || it.id || '') + '" alt="" loading="lazy" data-act="handlePosterImgError" data-act-args="[&quot;@self&quot;]">' : '<div class="live-preview-poster live-preview-poster-placeholder u-bg-v_color_bg_sunken" data-needs-fallback="1" style="width:100%; height:100%;"><small class="u-c-v_muted u-fs-v_font_size_xs">No poster</small></div>') +
                 progressOverlay +
-                (dateBadge + bottomBadge) +
+                upNextTileBadgesHtml(it, 'showBadgesTraktContinueWatching') +
                 '<button type="button" class="cw-remove-btn" data-remove-type="external" data-provider="trakt" data-target="history" data-list-id="history" data-remove-id="' + escapeAttr(it.id || it.imdbId || '') + '" data-media-type="' + escapeAttr(it.type || 'series') + '" data-act="removeListItemFromDetails" data-act-stop data-act-args="[&quot;@self&quot;]" title="Remove from Trakt History" aria-label="Remove from Trakt History">\u2715</button>' +
                 overlays +
               '</div>' +
@@ -1400,33 +1345,6 @@ function renderMyPrivateTraktLists(lists) {
             if (isMobileEnd) overlays += '<div class="list-card-count-overlay mobile-only u-cur-pointer" data-act="openTraktAiringNextDetailsPage" data-act-stop>' + totalCount + ' &rsaquo;</div>';
             if (isDesktopEnd) overlays += '<div class="list-card-count-overlay desktop-only u-cur-pointer" data-act="openTraktAiringNextDetailsPage" data-act-stop>' + totalCount + ' &rsaquo;</div>';
 
-            const showAiringBadges = typeof getBadgeSetting === 'function' ? getBadgeSetting('showBadgesAiringNext') : true;
-            const showAirDate = showAiringBadges && (typeof getBadgeSetting === 'function' ? getBadgeSetting('showBadgeAirDate') : true);
-            const showPremiere = showAiringBadges && (typeof getBadgeSetting === 'function' ? getBadgeSetting('showBadgeSeasonPremiere') : true);
-            const showFinale = showAiringBadges && (typeof getBadgeSetting === 'function' ? getBadgeSetting('showBadgeSeasonFinale') : true);
-            const showFinaleDate = showAiringBadges && (typeof getBadgeSetting === 'function' ? getBadgeSetting('showBadgeSeasonFinaleDate') : true);
-
-            const hasAired = it.airDate && typeof isEpisodeAired === 'function' ? isEpisodeAired(it.airDate) : false;
-            const isUnairedEp = it.airDate ? !hasAired : !!it.isUnaired;
-            let dateBadge = '';
-            if (showAirDate && it.airDate && !hasAired && typeof isEpisodeAired === 'function') {
-              dateBadge = typeof watchItemAirDateBadgeHtml === 'function' ? watchItemAirDateBadgeHtml(it) : '';
-            }
-            const isSeasonPremiere = (it.episodeNum === 1 || (it.episodeNum == null && it.isSeasonPremiere));
-            const isFinaleUnaired = it.seasonFinaleAirDate && typeof isEpisodeAired === 'function' ? !isEpisodeAired(it.seasonFinaleAirDate) : !!it.seasonFinaleAirDate;
-            let bottomBadge = '';
-            if (isUnairedEp) {
-              if (showPremiere && isSeasonPremiere) {
-                bottomBadge = '<div class="cw-date-badge cw-date-badge-premiere" title="Airs on ' + escapeAttr(it.airDate || '') + '">Season Premiere</div>';
-              } else if (showFinale && it.isSeasonFinale) {
-                bottomBadge = '<div class="cw-date-badge cw-date-badge-finale" title="Airs on ' + escapeAttr(it.airDate || '') + '">Season Finale</div>';
-              } else if (showFinaleDate && it.seasonFinaleAirDate && isFinaleUnaired) {
-                const finaleText = typeof formatAirDateBadge === 'function' ? formatAirDateBadge(it.seasonFinaleAirDate) : '';
-                if (finaleText) {
-                  bottomBadge = '<div class="cw-date-badge cw-date-badge-finale-date" title="Season finale airs on ' + escapeAttr(it.seasonFinaleAirDate) + '">Finale: ' + escapeHtml(finaleText) + '</div>';
-                }
-              }
-            }
             const label = (typeof formatWatchItemLabel === 'function')
               ? formatWatchItemLabel({ showTitle: it.name, seasonNum: it.seasonNum, episodeNum: it.episodeNum, title: it.episodeTitle || '', isSeasonPremiere: it.isSeasonPremiere })
               : {
@@ -1438,7 +1356,7 @@ function renderMyPrivateTraktLists(lists) {
             return '<div class="list-card-mini-poster-tile" data-name="' + escapeAttr(l.name) + '" data-url="' + escapeAttr(l.url) + '" data-type="' + escapeAttr(type) + '">' +
               '<div class="list-card-mini-poster-img-wrap">' +
                 (traktPoster ? '<img src="' + escapeAttr(traktPoster) + '" class="clickable-poster" data-id="' + escapeAttr(it.id) + '" data-type="' + escapeAttr(it.type || type) + '" data-title="' + escapeAttr(it.name || '') + '" data-poster="' + escapeAttr(traktPoster || '') + '" data-imdb="' + escapeAttr(it.imdbId || it.id || '') + '" alt="" loading="lazy" data-act="handlePosterImgError" data-act-args="[&quot;@self&quot;]">' : '<div class="live-preview-poster live-preview-poster-placeholder u-bg-v_color_bg_sunken" data-needs-fallback="1" style="width:100%; height:100%;"><small class="u-c-v_muted u-fs-v_font_size_xs">No poster</small></div>') +
-                (dateBadge + bottomBadge) +
+                airingNextTileBadgesHtml(it) +
                 '<button type="button" class="cw-remove-btn" data-remove-type="external" data-provider="trakt" data-target="watchlist" data-list-id="watchlist" data-remove-id="' + escapeAttr(it.id || it.imdbId || '') + '" data-media-type="' + escapeAttr(it.type || 'series') + '" data-act="removeListItemFromDetails" data-act-stop data-act-args="[&quot;@self&quot;]" title="Remove from Trakt Watchlist" aria-label="Remove from Trakt Watchlist">\u2715</button>' +
                 overlays +
               '</div>' +
@@ -2727,44 +2645,7 @@ function renderMySimklLists(lists) {
     if (!window._simklRawAiringCandidates || !window._simklRawAiringCandidates.length) {
       window._simklRawAiringCandidates = airingNextList.items.map(it => ({ ...it }));
     }
-    const localAiringList = (typeof loadLocalCustomLists === 'function') ? ((loadLocalCustomLists()['airing-next'] || {}).items || []) : [];
-    if (!airingNextList._cachedApplied) {
-      try {
-        const cached = JSON.parse(localStorage.getItem('myListAddon:simklAiringNextCache') || '[]');
-        if (Array.isArray(cached) && cached.length) {
-          const cacheMap = new Map(cached.map((c) => [c.id || c.imdbId || (c.tmdbId ? 'tmdb:' + c.tmdbId : ''), c]));
-          airingNextList.items.forEach((it) => {
-            const c = cacheMap.get(it.id || it.imdbId || (it.tmdbId ? 'tmdb:' + it.tmdbId : ''));
-            const localMatch = localAiringList.find((a) => a && (a.showId === it.id || a.showId === it.imdbId || (it.tmdbId && a.showId === 'tmdb:' + it.tmdbId)));
-            if (c) {
-              it.airDate = c.airDate;
-              it.seasonNum = c.seasonNum;
-              it.episodeNum = c.episodeNum;
-              it.isSeasonPremiere = (typeof c.isSeasonPremiere === 'boolean') ? c.isSeasonPremiere : (localMatch ? localMatch.isSeasonPremiere : (c.episodeNum === 1));
-              it.isSeasonFinale = !!(c.isSeasonFinale || (localMatch && localMatch.isSeasonFinale));
-              it.seasonFinaleAirDate = c.seasonFinaleAirDate || (localMatch && localMatch.seasonFinaleAirDate) || null;
-              it.seasonFinaleEpisodeNumber = c.seasonFinaleEpisodeNumber || null;
-              it.isUnaired = true;
-              it.episodeTitle = c.episodeTitle || (it.isSeasonPremiere ? 'Season Premiere' : (it.isSeasonFinale ? 'Season Finale' : (c.episodeNum != null ? ('Episode ' + c.episodeNum) : '')));
-            } else if (localMatch) {
-              it.isSeasonPremiere = !!localMatch.isSeasonPremiere;
-              it.isSeasonFinale = !!localMatch.isSeasonFinale;
-              it.seasonFinaleAirDate = localMatch.seasonFinaleAirDate || null;
-            }
-          });
-        } else if (localAiringList.length) {
-          airingNextList.items.forEach((it) => {
-            const localMatch = localAiringList.find((a) => a && (a.showId === it.id || a.showId === it.imdbId || (it.tmdbId && a.showId === 'tmdb:' + it.tmdbId)));
-            if (localMatch) {
-              it.isSeasonPremiere = !!localMatch.isSeasonPremiere;
-              it.isSeasonFinale = !!localMatch.isSeasonFinale;
-              it.seasonFinaleAirDate = localMatch.seasonFinaleAirDate || null;
-            }
-          });
-        }
-      } catch (e) {}
-      airingNextList._cachedApplied = true;
-    }
+    applyAiringNextCache(airingNextList, 'simklAiringNextCache');
     const hasExpiredSimkl = (airingNextList.items || []).some((it) => it && it.airDate && typeof isEpisodeAired === 'function' && isEpisodeAired(it.airDate));
     if (!_simklAiringNextEnriching && (hasExpiredSimkl || !_simklAiringNextEnrichedAt || Date.now() - _simklAiringNextEnrichedAt >= 120000)) {
       enrichSimklAiringNextDates(airingNextList).catch(() => {});
@@ -2824,35 +2705,6 @@ function renderMySimklLists(lists) {
           }
           const simklStatus = isAiringNext ? (it.status || 'watching') : (l.statusKey || (l.url ? l.url.split(':')[3] : 'plantowatch'));
           const removeBtn = '<button type="button" class="cw-remove-btn" data-remove-type="external" data-provider="simkl" data-target="status" data-list-id="' + escapeAttr(simklStatus) + '" data-remove-id="' + escapeAttr(it.id) + '" data-media-type="' + escapeAttr(it.type || type) + '" data-act="removeListItemFromDetails" data-act-stop data-act-args="[&quot;@self&quot;]" title="Remove from Simkl" aria-label="Remove from Simkl">\u2715</button>';
-          const showAiringBadges = typeof getBadgeSetting === 'function' ? getBadgeSetting('showBadgesAiringNext') : true;
-          const showAirDate = showAiringBadges && (typeof getBadgeSetting === 'function' ? getBadgeSetting('showBadgeAirDate') : true);
-          const showPremiere = showAiringBadges && (typeof getBadgeSetting === 'function' ? getBadgeSetting('showBadgeSeasonPremiere') : true);
-          const showFinale = showAiringBadges && (typeof getBadgeSetting === 'function' ? getBadgeSetting('showBadgeSeasonFinale') : true);
-          const showFinaleDate = showAiringBadges && (typeof getBadgeSetting === 'function' ? getBadgeSetting('showBadgeSeasonFinaleDate') : true);
-
-          const hasAired = it.airDate && typeof isEpisodeAired === 'function' ? isEpisodeAired(it.airDate) : false;
-          const isUnairedEp = it.airDate ? !hasAired : !!it.isUnaired;
-          let dateBadge = '';
-          if (showAirDate && it.airDate && !hasAired && typeof isEpisodeAired === 'function') {
-            dateBadge = typeof watchItemAirDateBadgeHtml === 'function' ? watchItemAirDateBadgeHtml(it) : '';
-          }
-          const isSeasonPremiere = (it.episodeNum === 1 || (it.episodeNum == null && it.isSeasonPremiere));
-          const isSeasonFinale = !!it.isSeasonFinale;
-          const seasonFinaleAirDate = it.seasonFinaleAirDate || null;
-          const isFinaleUnaired = seasonFinaleAirDate && typeof isEpisodeAired === 'function' ? !isEpisodeAired(seasonFinaleAirDate) : !!seasonFinaleAirDate;
-          let bottomBadge = '';
-          if (isUnairedEp) {
-            if (showPremiere && isSeasonPremiere) {
-              bottomBadge = '<div class="cw-date-badge cw-date-badge-premiere" title="Airs on ' + escapeAttr(it.airDate || '') + '">Season Premiere</div>';
-            } else if (showFinale && isSeasonFinale) {
-              bottomBadge = '<div class="cw-date-badge cw-date-badge-finale" title="Airs on ' + escapeAttr(it.airDate || '') + '">Season Finale</div>';
-            } else if (showFinaleDate && seasonFinaleAirDate && isFinaleUnaired) {
-              const finaleText = typeof formatAirDateBadge === 'function' ? formatAirDateBadge(it.seasonFinaleAirDate) : '';
-              if (finaleText) {
-                bottomBadge = '<div class="cw-date-badge cw-date-badge-finale-date" title="Season finale airs on ' + escapeAttr(it.seasonFinaleAirDate) + '">Finale: ' + escapeHtml(finaleText) + '</div>';
-              }
-            }
-          }
           const label = (typeof formatWatchItemLabel === 'function')
             ? formatWatchItemLabel({ showTitle: it.name, seasonNum: it.seasonNum, episodeNum: it.episodeNum, title: it.episodeTitle || '', isSeasonPremiere: it.isSeasonPremiere })
             : {
@@ -2864,7 +2716,7 @@ function renderMySimklLists(lists) {
           return '<div class="list-card-mini-poster-tile" data-name="' + escapeAttr(l.name) + '" data-url="' + escapeAttr(l.url) + '" data-type="' + escapeAttr(type) + '" data-items="' + escapeAttr(totalCount) + '">' +
             '<div class="list-card-mini-poster-img-wrap">' +
               (smkPoster ? '<img src="' + escapeAttr(smkPoster) + '" class="clickable-poster" data-id="' + escapeAttr(it.id) + '" data-type="' + escapeAttr(it.type || type) + '" data-title="' + escapeAttr(it.name || '') + '" data-poster="' + escapeAttr(smkPoster || '') + '" alt="" loading="lazy">' : '<div class="u-bg-v_color_bg_sunken" style="width:100%; height:100%;"></div>') +
-              (isAiringNext ? (dateBadge + bottomBadge) : '') +
+              (isAiringNext ? airingNextTileBadgesHtml(it) : '') +
               removeBtn +
               overlays +
             '</div>' +
@@ -4518,115 +4370,6 @@ function addNewNuvioCollection(existing, incoming, options) {
   });
 
   return cleanedExisting.concat(newCols);
-}
-
-// Twin of src/api/61_media-app-sync.js:mergeNuvioCollections; tests/server-client-parity.test.mjs keeps them equal.
-function mergeNuvioCollections(existing, incoming) {
-  const existingArr = extractNuvioCollections(existing);
-  const incomingArr = extractNuvioCollections(incoming);
-
-  if (!existingArr.length) return incomingArr;
-  if (!incomingArr.length) return existingArr;
-
-  // Preserve all collections from other providers / community templates 100% untouched
-  const otherCollections = [];
-  let myListsCol = null;
-
-  for (let i = 0; i < existingArr.length; i++) {
-    const c = existingArr[i];
-    if (!c) continue;
-    const cTitle = String(c.title || c.name || '').trim();
-    const cFolders = Array.isArray(c.folders) ? c.folders : [];
-
-
-    const isMyLists = (c.id && (c.id === 'my-lists-collections' || c.id === 'my-lists-addon')) ||
-                      (cTitle && (cTitle.toLowerCase() === 'my lists collections' || cTitle.toLowerCase() === 'my lists addon' || cTitle.toLowerCase() === 'my lists'));
-    if (isMyLists) {
-      if (!myListsCol) {
-        myListsCol = JSON.parse(JSON.stringify(c));
-      } else if (cFolders.length > 0) {
-        if (!Array.isArray(myListsCol.folders)) myListsCol.folders = [];
-        myListsCol.folders.push.apply(myListsCol.folders, JSON.parse(JSON.stringify(cFolders)));
-      }
-    } else {
-      otherCollections.push(JSON.parse(JSON.stringify(c)));
-    }
-  }
-
-  if (!myListsCol) {
-    myListsCol = {
-      id: 'my-lists-collections',
-      title: 'My Lists Collections',
-      name: 'My Lists Collections',
-      viewMode: 'FOLLOW_LAYOUT',
-      showAllTab: false,
-      pinToTop: false,
-      focusGlowEnabled: true,
-      hidden: false,
-      isVisible: true,
-      enabled: true,
-      folders: []
-    };
-  } else {
-    myListsCol.id = 'my-lists-collections';
-    myListsCol.title = 'My Lists Collections';
-    myListsCol.name = 'My Lists Collections';
-    myListsCol.hidden = false;
-    myListsCol.isVisible = true;
-    myListsCol.enabled = true;
-    if (!Array.isArray(myListsCol.folders)) myListsCol.folders = [];
-  }
-
-  // Merge incoming folders ONLY into myListsCol. If an incoming collection matches otherCollections, update that collection.
-  for (let i = 0; i < incomingArr.length; i++) {
-    const inCol = incomingArr[i];
-    if (!inCol) continue;
-    const inTitle = String(inCol.title || inCol.name || '').trim();
-    const isIncomingMyLists = (inCol.id && (inCol.id === 'my-lists-collections' || inCol.id === 'my-lists-addon')) ||
-                             (inTitle && (inTitle.toLowerCase() === 'my lists collections' || inTitle.toLowerCase() === 'my lists addon' || inTitle.toLowerCase() === 'my lists'));
-
-    if (inCol.id && !isIncomingMyLists) {
-      const existingOtherIdx = otherCollections.findIndex(function (oc) { return oc.id === inCol.id; });
-      if (existingOtherIdx !== -1) {
-        otherCollections[existingOtherIdx] = JSON.parse(JSON.stringify(inCol));
-        continue;
-      }
-    }
-
-    // Folders intended for My Lists Collections
-    const foldersToMerge = Array.isArray(inCol.folders) ? inCol.folders : [inCol];
-    for (let j = 0; j < foldersToMerge.length; j++) {
-      const inF = foldersToMerge[j];
-      if (!inF || (!inF.id && !inF.title && !inF.name)) continue;
-      const cleanFolder = Object.assign({}, inF, {
-        hidden: false,
-        isVisible: true,
-        enabled: true
-      });
-      if (Array.isArray(cleanFolder.catalogSources)) {
-        cleanFolder.catalogSources = cleanFolder.catalogSources.map(function (cs) {
-          let cName = String(cs.name || cs.title || cs.catalogId || '').trim();
-          cName = stripMediaSuffix(cName);
-          return Object.assign({}, cs, {
-            name: cName,
-            title: cName
-          });
-        });
-      }
-      const fIdx = myListsCol.folders.findIndex(function (f) {
-        return (f.id && inF.id && f.id === inF.id) ||
-               (f.title && inF.title && f.title.toLowerCase() === inF.title.toLowerCase()) ||
-               (f.name && inF.name && f.name.toLowerCase() === inF.name.toLowerCase());
-      });
-      if (fIdx !== -1) {
-        myListsCol.folders[fIdx] = Object.assign({}, myListsCol.folders[fIdx], cleanFolder);
-      } else {
-        myListsCol.folders.push(JSON.parse(JSON.stringify(cleanFolder)));
-      }
-    }
-  }
-
-  return otherCollections.concat([myListsCol]);
 }
 
 function buildNuvioCollectionsPayload(collections, parents) {

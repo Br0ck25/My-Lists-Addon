@@ -121,7 +121,7 @@
   - Added fallback in web preview rendering to `ORIGIN + '/api/channel-poster?name=' + encodeURIComponent(name) + '&v=6'` when `posterUrl` is empty.
   - Added `OPTIONS` preflight support and `Access-Control-Allow-Origin: *` to `/api/channel-lineup`, ensuring lineup items include `poster`, `thumbnail`, `title`, and media ID (`tmdb:...` or `tt...`).
 - **Phase 1 (Default preset, guest manifest, unified sync)**:
-  - Built default preset & guest manifest endpoints `/nuvio-default/manifest.json`, `/c/nuvio-default/manifest.json`, and `/nuvio-default/catalog/:type/:id.json` backed by `buildNuvioTvDefaultPreset()` and `buildNuvioTvDefaultConfig()`.
+  - Built default preset & guest manifest endpoints `/nuvio-default/manifest.json`, `/c/nuvio-default/manifest.json`, and `/nuvio-default/catalog/:type/:id.json` backed by `buildNuvioTvDefaultConfig()`.
   - Built unified sync route `GET /api/nuvio-tv/sync/:target` (registered as public in `tests/route-access.json`), supporting `"default"` target, user accounts, and install tokens. Computes deterministic SHA-256 `versionHash` and formats collections and channels in Nuvio schema.
 - **Phase 2 (New user account seeding for Nuvio TV Launcher & existing user sign-in)**:
   - Implemented `seedNuvioTvNewUser` in `src/catalog/08_quickadd-chart-data.js`.
@@ -159,12 +159,15 @@ Plan: `docs/PERF_AUDIT_PLAN.md`. Done: PERF-00, 12, 05, 08+07 (both steps), 09, 
 - `sync/meta` returns the record's own `updatedAt` for activity-database accounts (same number `sync/load` returns). Anything that changes an account's tracking must bump `settings.tracking.updatedAt`, or other open tabs will not notice (a ping does today because it goes through the blob path).
 - `verifyShelfOwner` is remembered 10 s per (name, key); purge and key rotation clear it on the same isolate, other isolates lag up to 10 s.
 
-### PERF-02 (playback ping), blocked, owner/next-AI decision
+### PERF-02 (playback ping): built as PERF-01 (2026-11-14, behind `FF_DIRECT_PLAY`); the text below is the history
+The owner approved the rebuild after measuring four accounts over 10,000 plays. `src/data/41_direct-play.js` is the direct path; `tests/perf-direct-play.test.mjs` pins the three behaviours below on both paths. Off unless `FF_DIRECT_PLAY` is `1` (dashboard, no deploy to turn off). Do not remove the old path: uncopied accounts and self-hosters use it.
+
+### PERF-02 (playback ping), was blocked, owner/next-AI decision
 `tests/perf-ping-cost.test.mjs` pins today's cost (500 plays: 2 full `watch_events` reads, 14 activity statements per ping). The plan's fix (call `recordActivityPlay` directly for activity accounts) would lose, with no test able to hide it:
 1. The next-episode and "fully watched" decision. `applyEpisodePlayToBlob` asks TMDB for the next aired episode, un-completes a finished show when a new episode is played, and marks it completed when nothing is ahead. `recordActivityPlay` only moves `show_progress` forward and never touches `status = 'completed'`.
 2. A first-ever play of a show gets its Continue Watching entry from that blob step; the schedule job (`show.refresh`) only fills it in later (`shelfStoredForUnknown`).
 3. The record's `updatedAt` bump (see PERF-03 above) would need an explicit write.
-It also only holds with `FF_SHOW_SCHEDULE` on. Smaller option not built (not in the plan): for activity accounts drop the second `env.CONFIGS.get(syncKey)` race check in `writeSubtitlesPlayRecord` (one full assembly less per ping); concurrent pings then can overwrite each other's stored Continue Watching entry. The webhook (`64_media-server-scrobble.js recordScrobblePlay`) has the same shape and the same blockers.
+It also only holds with `FF_SHOW_SCHEDULE` on. **Tried 2026-11-10 (audit PERF-01), not kept:** dropping the second `env.CONFIGS.get(syncKey)` race check for activity accounts saved 1 of 14 activity statements and no full history read (the second get is served from the isolate), so it was reverted: the cost is the assembly (`watchHistoryAll`) plus `saveTrackingRecord`'s id read, and only the plan's direct `recordActivityPlay` route removes them (needs the owner's call on the three behaviours above). Smaller option not built (not in the plan): for activity accounts drop the second `env.CONFIGS.get(syncKey)` race check in `writeSubtitlesPlayRecord` (one full assembly less per ping); concurrent pings then can overwrite each other's stored Continue Watching entry. The webhook (`64_media-server-scrobble.js recordScrobblePlay`) has the same shape and the same blockers.
 
 ### Findings for the owner / next AI
 - **PERF-04 note:** `apiuse:*` still counts catalog-row requests on the shared TMDB key, not real outbound calls (product change, not made). `evt:*`, `searchq:*`, genre/decade counters call `d1BumpStat` directly and are still one write per event.
