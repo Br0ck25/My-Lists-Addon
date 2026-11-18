@@ -121,6 +121,7 @@
   "/api/nuvio-tv/device/poll": "public",
   "/api/nuvio-tv/history": "public",
   "/api/nuvio-tv/history/remove": "public",
+  "/api/nuvio-tv/progress": "public",
   "/api/nuvio-tv/sync": "public",
   "/api/person-credits": "public",
   "/api/person-search": "public",

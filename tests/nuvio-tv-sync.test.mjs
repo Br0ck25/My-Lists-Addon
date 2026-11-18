@@ -1085,3 +1085,30 @@ describe("Nuvio TV Launcher - Dedicated TV Addon (app.my-list.tv) & /nuvio-tv-la
 
 
 
+
+describe("My Lists TV progress", () => {
+  const post = (env, json) => call(env, "/api/nuvio-tv/progress", { method: "POST", headers: { "origin": "https://mylistsaddon.com" }, json });
+  it("stores part-watched titles as Continue Watching with a percentage, and finishing clears them", async () => {
+    const env = makeEnv({ DB: makeD1(), CONFIGS: makeKv() });
+    await accountProof(env, "tvprogress");
+    const ep = await post(env, { targetId: "tvprogress", type: "series", imdbId: "tt0903747", season: 1, episode: 3, name: "Gray Matter", showTitle: "Breaking Bad", positionMs: 600000, durationMs: 2400000 });
+    assert.equal(ep.status, 200); assert.equal(ep.body.progress, 25);
+    await post(env, { targetId: "tvprogress", type: "movie", imdbId: "tt0137523", name: "Fight Club", positionMs: 1000, durationMs: 100000 }); // 1%: just a start
+    const cw = JSON.parse(await env.CONFIGS.get("creatorsynctracking:tvprogress")).continueWatching;
+    assert.equal(cw.length, 1);
+    assert.equal(cw[0].showId, "tt0903747"); assert.equal(cw[0].seasonNum, 1); assert.equal(cw[0].episodeNum, 3); assert.equal(cw[0].progress, 25);
+    // Moving on to the next episode replaces the show's entry rather than adding a second one.
+    await post(env, { targetId: "tvprogress", type: "series", imdbId: "tt0903747", season: 1, episode: 4, name: "Cancer Man", positionMs: 1200000, durationMs: 2400000 });
+    const cw2 = JSON.parse(await env.CONFIGS.get("creatorsynctracking:tvprogress")).continueWatching;
+    assert.deepEqual(cw2.map((e) => e.episodeNum), [4]);
+    // Finishing it goes through history, which takes it out of Continue Watching.
+    await call(env, "/api/nuvio-tv/history", { method: "POST", headers: { "origin": "https://mylistsaddon.com" }, json: { targetId: "tvprogress", type: "series", imdbId: "tt0903747", season: 1, episode: 4, completed: true } });
+    assert.equal(JSON.parse(await env.CONFIGS.get("creatorsynctracking:tvprogress")).continueWatching.length, 0);
+  });
+  it("refuses an unknown box and bad input", async () => {
+    const env = makeEnv({ DB: makeD1(), CONFIGS: makeKv() });
+    assert.equal((await post(env, { targetId: "nobody", type: "movie", imdbId: "tt1", positionMs: 5, durationMs: 10 })).status, 404);
+    await accountProof(env, "tvprogress2");
+    assert.equal((await post(env, { targetId: "tvprogress2", type: "movie", imdbId: "notanid", positionMs: 5, durationMs: 10 })).status, 400);
+  });
+});
