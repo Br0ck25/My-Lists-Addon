@@ -4822,7 +4822,7 @@ async function purgeCreatorData(env, username, options = {}) {
   // today, plus the legacy ones (harmless if absent) so an old account
   // still gets fully cleaned.
   const dataKeys = [
-    `creatorsync:${u}`,
+    `creatorsync:${u}`, `tvsetup:${u}`,
     `creatorsynctracking:${u}`,
     `creatorsyncpresets:${u}`,
     `creatorsyncchannels:${u}`,

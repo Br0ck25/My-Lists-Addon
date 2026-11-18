@@ -34,7 +34,7 @@ const WORKER_BUILD_DATE = "2026-11-18";
 // header.js plus the numbered files, so two pasted Workers carry the same
 // value only if they are the same code. /admin shows it beside the build date:
 // after pasting, compare it with what `python build.py` printed.
-const WORKER_BUILD = "cb5a68b587";
+const WORKER_BUILD = "df7a1a64c7";
 
 // --- Trakt Continue Watching: how many shows get a "next episode" check -------
 //
@@ -8722,7 +8722,7 @@ async function purgeCreatorData(env, username, options = {}) {
   // today, plus the legacy ones (harmless if absent) so an old account
   // still gets fully cleaned.
   const dataKeys = [
-    `creatorsync:${u}`,
+    `creatorsync:${u}`, `tvsetup:${u}`,
     `creatorsynctracking:${u}`,
     `creatorsyncpresets:${u}`,
     `creatorsyncchannels:${u}`,

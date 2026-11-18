@@ -52,6 +52,8 @@ async function populated(extra = {}) {
   db.prepare("INSERT INTO channels (public_code, owner_account_id, name, visibility, pool_version, created_at, updated_at) VALUES ('sharedch', ?, 'Shared', 'public', 1, 0, 0)").run(id);
   await env.BLOBS.put("channels/privch/1.json", "[]");
   await env.BLOBS.put("channels/sharedch/1.json", "[]");
+  // The TV launcher's addon and playlist setup kept on the account (encrypted, so any text will do here).
+  await env.CONFIGS.put("tvsetup:annpurge", JSON.stringify({ updatedAt: 1, enc: "x" }));
   // A legacy list in KV, and an install link.
   const saved = await call(env, "/api/creator/lists/save", { method: "POST", json: { creatorName: "annpurge", creatorKey: ann.creatorKey, slug: "mine", name: "Mine", type: "movie", items: [{ id: "tt0133093" }] } });
   assert.equal(saved.body.ok, true, JSON.stringify(saved.body));
@@ -63,6 +65,7 @@ async function populated(extra = {}) {
 function assertNothingLeft(env, db, id) {
   assert.equal(count(db, "SELECT count(*) AS n FROM feedback WHERE id = 'fbAnn' OR creator_name = 'annpurge' OR body_json LIKE '%annpurge%'"), 0, "the support thread is deleted with the account");
   assert.equal(env.CONFIGS._store.has("feedback:fbAnn"), false);
+  assert.equal(env.CONFIGS._store.has("tvsetup:annpurge"), false, "the stored TV setup");
   assert.equal(count(db, "SELECT count(*) AS n FROM feedback WHERE id = 'fbOther'"), 1, "another person's thread stays");
   assert.equal(env.CONFIGS._store.has("feedback:fbOther"), true);
   assert.equal(count(env.DB_ACTIVITY._db, "SELECT count(*) AS n FROM watch_positions WHERE account_id = ?", id), 0, "resume positions");

@@ -1169,6 +1169,7 @@ describe("My Lists TV setup (addons and playlists on the account)", () => {
     assert.ok(!raw.includes("SECRETKEY123") && !raw.includes("iptv.example"), "nothing readable is stored");
     const got = await setup(env, { targetId: tv2, action: "get" });   // a second TV, a different token, the same account
     assert.deepEqual(got.body.addons, addons); assert.deepEqual(got.body.playlists, ["http://iptv.example/a.m3u?user=u&pass=p"]); assert.equal(got.body.updatedAt, set.body.updatedAt);
+    // Deleting the account removes the stored setup too.
   });
   it("never stores without an encryption key, and refuses a username and bad requests", async () => {
     const env = makeEnv({ DB: makeD1(), CONFIGS: makeKv() });
