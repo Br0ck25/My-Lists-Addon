@@ -2734,6 +2734,18 @@ New test in `tests/worker.test.mjs` ("passes a pick's runtime on"): a movie and 
 ### Checked
 `tests/nuvio-tv-sync.test.mjs`: set and get, the website's extra fields kept, removal, a username refused, a bad action.
 
+## 2026-11-18 — My Lists TV setup on the account (prepared; not deployed)
+
+- **Added `POST /api/nuvio-tv/setup`** for the My Lists TV launcher. A signed-in TV profile saves its stream addons and IPTV playlists to its account (`action: "set"`, up to 50 addons and 20 playlists) and another TV paired to the same account reads them back (`action: "get"`), so a new TV needs only a sign-in. The links carry debrid keys and IPTV logins, so the record is stored in KV (`tvsetup:<username>`) **encrypted at rest** with `TOKEN_ENCRYPTION_KEY` (the install secrets' AES-GCM, bound to the account). **Without that key nothing is stored** (503). Only the pairing secret opens it; 60 requests a minute per account.
+- Code in `src/api/84_tv-setup-routes.js`; one more clause on the existing delegating line in `handleNuvioTvHistoryRoute` (`25_`), no baseline grew.
+- The server (and so you, as its owner) can read these lists with the encryption key, which is the choice made over end-to-end encryption.
+
+### Owner steps
+1. Paste the new Worker. `TOKEN_ENCRYPTION_KEY` must already be set (it is, for install secrets).
+
+### Checked
+`tests/nuvio-tv-sync.test.mjs`: nothing readable in storage, a second TV paired to the same account gets the lists back, no key means no write, a username is refused, a bad request.
+
 ## 2026-11-10 — Independent audit fixes: account deletion, bad list entries, KV outages, indexes (build `0b1c40b88d`, prepared; not deployed)
 
 Plan and evidence: `docs/audit-2026-11-10/` (finding ids in brackets). Not fixed in this release: SEC-01, SEC-02, PERF-01, API-04, PROD-02, UI-02 to UI-09 (see the notes under Owner steps).

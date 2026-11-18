@@ -123,6 +123,7 @@
   "/api/nuvio-tv/history/remove": "public",
   "/api/nuvio-tv/library": "public",
   "/api/nuvio-tv/progress": "public",
+  "/api/nuvio-tv/setup": "public",
   "/api/nuvio-tv/sync": "public",
   "/api/person-credits": "public",
   "/api/person-search": "public",
