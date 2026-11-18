@@ -2713,7 +2713,7 @@ New test in `tests/worker.test.mjs` ("passes a pick's runtime on"): a movie and 
 ## 2026-11-18 — My Lists TV progress (prepared; not deployed)
 
 - **Added `POST /api/nuvio-tv/progress`** for the My Lists TV launcher. A signed-in box reports where it stopped in a title (`targetId`, `imdbId`, `season`/`episode`, `positionMs`, `durationMs`, name and poster). It is stored as a playback position (source `mylists-tv`, so the Nuvio and Stremio position sends pick it up) and as a **Continue Watching** entry with `progress` (percent), `positionMs` and `durationMs`, which replaces the same show's or movie's earlier entry. Under 2% or 90% and over is ignored: a finished play goes to `/api/nuvio-tv/history`, which already clears the entry. 120 requests a minute per account.
-- Same trust as `/api/nuvio-tv/history`: the box's own link identifies the account. Code in `src/api/82_tv-progress-routes.js`; one delegating clause on an existing line in `handleNuvioTvHistoryRoute` (`25_`), so no baseline grew. `/api/nuvio-tv/*` is already exempt from the CSRF check.
+- Same trust as `/api/nuvio-tv/history`: only the secret the TV got at pairing opens it (a username is refused). An account on the activity database keeps the entry in its account_settings record, like a play does. Code in `src/api/82_tv-progress-routes.js`; one delegating clause on an existing line in `handleNuvioTvHistoryRoute` (`25_`), so no baseline grew. `/api/nuvio-tv/*` is already exempt from the CSRF check.
 - Not changed: how the website draws Continue Watching. The new entries use the same fields as the others plus the three extra ones above.
 
 ### Owner steps

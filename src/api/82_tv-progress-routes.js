@@ -12,8 +12,10 @@ async function handleNuvioTvProgress(request, env, ctx) {
   if (request.method !== "POST") return json({ ok: false, error: "Method not allowed." }, 405, corsHeaders());
   let body;
   try { body = await readJsonObject(request); } catch { return json({ ok: false, error: "Invalid JSON body." }, 400, corsHeaders()); }
-  const { resolved, username } = await resolveNuvioTvTargetData(String((body && body.targetId) || "").trim(), env);
-  if (!resolved || !username) return json({ ok: false, error: "Target not found or not paired." }, 404, corsHeaders());
+  // Only the secret the TV was given at pairing opens this, as with /history (a username is public).
+  const device = await resolveNuvioTvDeviceToken(env, String((body && body.targetId) || "").trim());
+  if (!device) return json({ ok: false, error: "Target not found or not paired. Pair the TV again." }, 404, corsHeaders());
+  const username = device.username;
   if (await consumeRateLimit(env, ctx, "tvprogress", username, 120, 60)) return json({ ok: false, error: "Too many requests." }, 429, corsHeaders());
 
   const imdbId = String(body.imdbId || "").trim();
@@ -29,10 +31,12 @@ async function handleNuvioTvProgress(request, env, ctx) {
   const acct = env.DB ? await env.DB.prepare("SELECT id FROM accounts WHERE username = ? COLLATE NOCASE LIMIT 1").bind(username).first().catch(() => null) : null;
   if (acct) await recordWatchPosition(env, acct.id, "mylists-tv", { imdbId, kind: isSeries ? "series" : "movie", season: isSeries ? season : null, episode: isSeries ? episode : null, positionMs, durationMs, title: String(body.name || "") });
 
-  await ensureTrackingMigrated(env, username);
+  // An account on the activity database keeps this part of its record in account_settings (41_), the others in KV and D1.
+  const direct = await directPlayLoad(env, username);
+  if (!direct) await ensureTrackingMigrated(env, username);
   const syncKey = `creatorsynctracking:${username}`;
-  let blob = null;
-  if (env.DB) { try { blob = await readCreatorTrackingD1(env, username); } catch {} }
+  let blob = direct ? direct.blob : null;
+  if (!blob && env.DB) { try { blob = await readCreatorTrackingD1(env, username); } catch {} }
   if (!blob) { try { const raw = await env.CONFIGS.get(syncKey); if (raw) blob = JSON.parse(raw); } catch {} }
   if (!blob || typeof blob !== "object") blob = { watchHistory: [], continueWatching: [], fullyWatchedShowIds: [], dismissedContinueWatching: {}, watchlist: [] };
   const name = String(body.name || "").slice(0, 200), poster = String(body.poster || "").slice(0, 500);
@@ -42,7 +46,12 @@ async function handleNuvioTvProgress(request, env, ctx) {
   const rest = (Array.isArray(blob.continueWatching) ? blob.continueWatching : []).filter((it) => it && (isSeries ? it.showId !== imdbId : String(it.id || "") !== imdbId));
   blob.continueWatching = [entry, ...rest].slice(0, TV_PROGRESS_MAX);
   blob.updatedAt = Date.now();
-  await env.CONFIGS.put(syncKey, JSON.stringify(blob));
-  if (env.DB) { try { await saveCreatorTrackingD1(env, username, blob, false); } catch {} }
+  if (direct) {
+    const settings = await readTrackingSettings(env, direct.accountId);
+    await writeTrackingSettings(env, direct.accountId, settings.all, trackingRecordRest(blob));
+  } else {
+    await env.CONFIGS.put(syncKey, JSON.stringify(blob));
+    if (env.DB) { try { await saveCreatorTrackingD1(env, username, blob, false); } catch {} }
+  }
   return json({ ok: true, progress: entry.progress }, 200, corsHeaders());
 }
