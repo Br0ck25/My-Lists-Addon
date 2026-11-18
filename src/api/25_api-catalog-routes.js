@@ -1547,11 +1547,6 @@ async function handleFetch(request, env, ctx) {
     const lookupResponse = handleLookupRoutes(request, env, ctx, url, path);
     if (lookupResponse) return lookupResponse;
 
-    // /api/tv-backup, the My Lists TV encrypted setup backup. Returns a Response promise, or null.
-    // -- 81_tv-backup-routes.js.
-    const tvBackupResponse = handleTvBackupRoutes(request, env, ctx, url, path);
-    if (tvBackupResponse) return tvBackupResponse;
-
     // /api/imdb-ids, /api/recommendations, the TMDB and Trakt list search/browse routes and the Trakt, MDBList and Simkl OAuth start/callback, device-code and my-lists routes, at their original place. Returns a Response promise, or null.
     // -- 75_provider-list-and-oauth-routes.js.
     const providerListResponse = handleProviderListRoutes(request, env, ctx, url, path);

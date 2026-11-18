@@ -2682,3 +2682,15 @@ New test in `tests/worker.test.mjs` ("passes a pick's runtime on"): a movie and 
 
 ### Checked
 `bash verify.sh -q` passes (API-02's first commit broke the file-size budget for `02_`; fixed by moving the body reader to `71_`). Each fix has a test that failed first for the reason in the audit: `tests/providers.test.mjs` (API-05), `tests/media-app-sync.test.mjs` (API-04, 2 tests), `tests/media-server-plays.test.mjs` (API-01, 4 tests), `tests/metadata-off.test.mjs` (API-03), `tests/body-cap.test.mjs` (API-02, 2 tests).
+
+## 2026-11-18 — My Lists TV encrypted setup backup (build `28cb160767`, prepared; not deployed)
+
+- **Added `/api/tv-backup`** for the My Lists TV launcher (github.com/Br0ck25/MyListsTV). `PUT ?id=<32 hex>` stores a body and `GET ?id=<32 hex>` returns it. The TV encrypts its whole setup on the box with a recovery code the owner keeps, and the id is a hash of that code, so this Worker stores an opaque blob it cannot read and never sees the code. One blob per id (a new backup replaces the last), 256 KB cap read by bytes, 400-day expiry, 30 requests a minute per caller, `no-store`.
+- **The route is exempt from the browser-origin CSRF check**, listed with the other exemptions in `verifyCsrf`, because the TV app is not a browser page and sends no Origin. A forged cross-site write would need a 128-bit id.
+- Code in `src/api/81_tv-backup-routes.js`; one delegating line in `handleLookupRoutes` (`74_`); the `verifyCsrf` change edits an existing line, so no file-size baseline grew.
+
+### Owner steps
+1. Paste the new Worker. Nothing else. (Nothing changes on the site until the TV app's backup feature is used.)
+
+### Checked
+`bash verify.sh -q` passes. `tests/tv-backup.test.mjs` covers store and fetch, replace, 404, bad ids, empty and oversized bodies, the rate limit, other methods, and that no browser origin is needed.

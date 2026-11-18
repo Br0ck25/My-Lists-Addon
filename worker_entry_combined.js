@@ -34,7 +34,7 @@ const WORKER_BUILD_DATE = "2026-11-18";
 // header.js plus the numbered files, so two pasted Workers carry the same
 // value only if they are the same code. /admin shows it beside the build date:
 // after pasting, compare it with what `python build.py` printed.
-const WORKER_BUILD = "75c215a2f0";
+const WORKER_BUILD = "28cb160767";
 
 // --- Trakt Continue Watching: how many shows get a "next episode" check -------
 //
@@ -4329,9 +4329,7 @@ async function schemaWriteGate(request, env) {
 // 1. Webhook ingestion routes (/api/scrobble*) - called by media servers/Stremio
 // 2. OAuth provider callbacks and starts (/api/{trakt,mdblist,simkl,tmdb}/oauth/{start,callback})
 // 3. Admin form login and logout (/admin/login, /admin/logout)
-// 4. Ko-fi's payment webhook (/api/kofi-webhook), which carries its own token
-// 5. The My Lists TV backup (/api/tv-backup): the TV app is not a browser page, so it has no Origin. The blob is
-//    encrypted on the TV and stored under a hash of a secret code, so a forged cross-site write needs a 128-bit id.
+// 4. Ko-fi's payment webhook (/api/kofi-webhook), which carries its own token, and the TV app's encrypted backup (/api/tv-backup: not a browser page, no Origin; see 81_)
 function verifyCsrf(request) {
   const method = (request.method || "GET").toUpperCase();
   if (method !== "POST" && method !== "PUT" && method !== "PATCH" && method !== "DELETE") {
@@ -4358,10 +4356,7 @@ function verifyCsrf(request) {
   }
   // Ko-fi's payment webhook is posted by Ko-fi's servers, not by a page, and
   // proves itself with its verification token (handled in the route).
-  if (path === "/api/kofi-webhook") {
-    return null;
-  }
-  if (path === "/api/tv-backup") {
+  if (path === "/api/kofi-webhook" || path === "/api/tv-backup") {
     return null;
   }
   if (path === "/admin/login" || path === "/admin/logout") {
@@ -94131,11 +94126,6 @@ async function handleFetch(request, env, ctx) {
     const lookupResponse = handleLookupRoutes(request, env, ctx, url, path);
     if (lookupResponse) return lookupResponse;
 
-    // /api/tv-backup, the My Lists TV encrypted setup backup. Returns a Response promise, or null.
-    // -- 81_tv-backup-routes.js.
-    const tvBackupResponse = handleTvBackupRoutes(request, env, ctx, url, path);
-    if (tvBackupResponse) return tvBackupResponse;
-
     // /api/imdb-ids, /api/recommendations, the TMDB and Trakt list search/browse routes and the Trakt, MDBList and Simkl OAuth start/callback, device-code and my-lists routes, at their original place. Returns a Response promise, or null.
     // -- 75_provider-list-and-oauth-routes.js.
     const providerListResponse = handleProviderListRoutes(request, env, ctx, url, path);
@@ -122246,6 +122236,7 @@ function handleLookupRoutes(request, env, ctx, url, path) {
   if (path === "/api/toplists") return apiToplists(env, ctx);
   if (path === "/api/season") return apiSeason(env, ctx, url);
   if (path === "/api/title-search") return apiTitleSearch(request, env, ctx, url);
+  if (path === "/api/tv-backup") return handleTvBackupRoutes(request, env, ctx, url, path);
   if (path === "/api/poster-fallback") return apiPosterFallback(env, ctx, url);
   if (path === "/api/show-seasons") return apiShowSeasons(env, ctx, url);
   if (path === "/api/show-episodes") return apiShowEpisodes(env, ctx, url);

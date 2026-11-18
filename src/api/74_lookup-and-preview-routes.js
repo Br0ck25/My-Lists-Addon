@@ -290,6 +290,7 @@ function handleLookupRoutes(request, env, ctx, url, path) {
   if (path === "/api/toplists") return apiToplists(env, ctx);
   if (path === "/api/season") return apiSeason(env, ctx, url);
   if (path === "/api/title-search") return apiTitleSearch(request, env, ctx, url);
+  if (path === "/api/tv-backup") return handleTvBackupRoutes(request, env, ctx, url, path);
   if (path === "/api/poster-fallback") return apiPosterFallback(env, ctx, url);
   if (path === "/api/show-seasons") return apiShowSeasons(env, ctx, url);
   if (path === "/api/show-episodes") return apiShowEpisodes(env, ctx, url);

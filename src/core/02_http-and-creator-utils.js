@@ -455,9 +455,7 @@ async function schemaWriteGate(request, env) {
 // 1. Webhook ingestion routes (/api/scrobble*) - called by media servers/Stremio
 // 2. OAuth provider callbacks and starts (/api/{trakt,mdblist,simkl,tmdb}/oauth/{start,callback})
 // 3. Admin form login and logout (/admin/login, /admin/logout)
-// 4. Ko-fi's payment webhook (/api/kofi-webhook), which carries its own token
-// 5. The My Lists TV backup (/api/tv-backup): the TV app is not a browser page, so it has no Origin. The blob is
-//    encrypted on the TV and stored under a hash of a secret code, so a forged cross-site write needs a 128-bit id.
+// 4. Ko-fi's payment webhook (/api/kofi-webhook), which carries its own token, and the TV app's encrypted backup (/api/tv-backup: not a browser page, no Origin; see 81_)
 function verifyCsrf(request) {
   const method = (request.method || "GET").toUpperCase();
   if (method !== "POST" && method !== "PUT" && method !== "PATCH" && method !== "DELETE") {
@@ -484,10 +482,7 @@ function verifyCsrf(request) {
   }
   // Ko-fi's payment webhook is posted by Ko-fi's servers, not by a page, and
   // proves itself with its verification token (handled in the route).
-  if (path === "/api/kofi-webhook") {
-    return null;
-  }
-  if (path === "/api/tv-backup") {
+  if (path === "/api/kofi-webhook" || path === "/api/tv-backup") {
     return null;
   }
   if (path === "/admin/login" || path === "/admin/logout") {
