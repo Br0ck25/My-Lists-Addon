@@ -1154,7 +1154,7 @@ describe("My Lists TV library", () => {
   });
 });
 
-describe("My Lists TV setup (addons and playlists on the account)", () => {
+describe("My Lists TV setup (addons on the account)", () => {
   const KEY = "k1:" + Buffer.alloc(32, 7).toString("base64");
   const setup = (env, json) => call(env, "/api/nuvio-tv/setup", { method: "POST", headers: { "origin": "https://mylistsaddon.com" }, json });
   const addons = [{ url: "https://torrentio.strem.fun/torbox=SECRETKEY123/manifest.json", on: true }, { url: "https://x.example/manifest.json", on: false }];
@@ -1163,22 +1163,22 @@ describe("My Lists TV setup (addons and playlists on the account)", () => {
     const proof = await accountProof(env, "tvsetup");
     const tv1 = await pairTv(env, "tvsetup", proof), tv2 = await pairTv(env, "tvsetup", proof);
     assert.deepEqual((await setup(env, { targetId: tv1, action: "get" })).body.addons, []);
-    const set = await setup(env, { targetId: tv1, action: "set", addons, playlists: ["http://iptv.example/a.m3u?user=u&pass=p", "not a url"] });
-    assert.equal(set.status, 200); assert.equal(set.body.playlists, 1);
+    const set = await setup(env, { targetId: tv1, action: "set", addons: [...addons, { url: "not a url" }] });
+    assert.equal(set.status, 200); assert.equal(set.body.addons, 2);
     const raw = await env.CONFIGS.get("tvsetup:tvsetup");
-    assert.ok(!raw.includes("SECRETKEY123") && !raw.includes("iptv.example"), "nothing readable is stored");
+    assert.ok(!raw.includes("SECRETKEY123") && !raw.includes("torrentio"), "nothing readable is stored");
     const got = await setup(env, { targetId: tv2, action: "get" });   // a second TV, a different token, the same account
-    assert.deepEqual(got.body.addons, addons); assert.deepEqual(got.body.playlists, ["http://iptv.example/a.m3u?user=u&pass=p"]); assert.equal(got.body.updatedAt, set.body.updatedAt);
+    assert.deepEqual(got.body.addons, addons); assert.equal(got.body.updatedAt, set.body.updatedAt);
     // Deleting the account removes the stored setup too.
   });
   it("never stores without an encryption key, and refuses a username and bad requests", async () => {
     const env = makeEnv({ DB: makeD1(), CONFIGS: makeKv() });
     const proof = await accountProof(env, "tvsetup2"); const tv = await pairTv(env, "tvsetup2", proof);
-    assert.equal((await setup(env, { targetId: tv, action: "set", addons, playlists: [] })).status, 503);
+    assert.equal((await setup(env, { targetId: tv, action: "set", addons })).status, 503);
     assert.equal(await env.CONFIGS.get("tvsetup:tvsetup2"), null);
     const env2 = makeEnv({ DB: makeD1(), CONFIGS: makeKv(), TOKEN_ENCRYPTION_KEY: KEY });
     assert.equal((await setup(env2, { targetId: "tvsetup2", action: "get" })).status, 404);
     const tv2 = await pairTv(env2, "tvsetup3", await accountProof(env2, "tvsetup3"));
-    assert.equal((await setup(env2, { targetId: tv2, action: "set", addons: "x", playlists: [] })).status, 400);
+    assert.equal((await setup(env2, { targetId: tv2, action: "set", addons: "x" })).status, 400);
   });
 });

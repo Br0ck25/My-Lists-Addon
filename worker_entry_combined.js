@@ -27,14 +27,14 @@
 // pasted file is live (docs/RELEASES.md). build.py fills in both; nobody
 // raises a number by hand. The date is the day the code last changed (see
 // build_date in build.py).
-const WORKER_BUILD_DATE = "2026-11-18";
+const WORKER_BUILD_DATE = "2026-11-23";
 
 // A fingerprint of the exact sources this file was built from. build.py fills
 // in the placeholder below with the first 10 characters of the SHA-256 of
 // header.js plus the numbered files, so two pasted Workers carry the same
 // value only if they are the same code. /admin shows it beside the build date:
 // after pasting, compare it with what `python build.py` printed.
-const WORKER_BUILD = "df7a1a64c7";
+const WORKER_BUILD = "ff4505ae0b";
 
 // --- Trakt Continue Watching: how many shows get a "next episode" check -------
 //
@@ -130301,15 +130301,14 @@ async function handleNuvioTvLibrary(request, env, ctx) {
   if (refused) return refused;
   return json({ ok: true, updatedAt, count: items.length }, 200, corsHeaders());
 }
-// My Lists TV: a signed-in profile's addons and IPTV playlists, kept on its account.
+// My Lists TV: a signed-in profile's stream addons, kept on its account.
 //
-// POST /api/nuvio-tv/setup { targetId, action: "get" }                                  -> { ok, addons, playlists, updatedAt }
-// POST /api/nuvio-tv/setup { targetId, action: "set", addons: [{ url, on }], playlists: [url] } -> { ok, updatedAt }
-// The lists hold debrid keys and IPTV logins inside their links, so they are stored encrypted at rest with the Worker's
+// POST /api/nuvio-tv/setup { targetId, action: "get" }                       -> { ok, addons, updatedAt }
+// POST /api/nuvio-tv/setup { targetId, action: "set", addons: [{ url, on }] } -> { ok, updatedAt }
+// The list holds debrid keys inside the links, so it is stored encrypted at rest with the Worker's
 // TOKEN_ENCRYPTION_KEY (the same key and AES-GCM the install secrets use), bound to the account, and never written when no
 // key is configured. Only the secret the TV got at pairing opens it; one record per account.
 const TV_SETUP_ADDONS_MAX = 50;
-const TV_SETUP_PLAYLISTS_MAX = 20;
 const TV_SETUP_URL_MAX = 2000;
 
 function tvSetupContext(username) { return `tvsetup:${username}`; }
@@ -130329,23 +130328,22 @@ async function handleNuvioTvSetup(request, env, ctx) {
 
   if (body.action === "get") {
     const raw = await env.CONFIGS.get(key);
-    if (!raw) return json({ ok: true, addons: [], playlists: [], updatedAt: 0 }, 200, noStore);
+    if (!raw) return json({ ok: true, addons: [], updatedAt: 0 }, 200, noStore);
     try {
       const rec = JSON.parse(raw);
       const data = JSON.parse(await decryptToken(rec.enc, env, tvSetupContext(username)));
-      return json({ ok: true, addons: data.addons || [], playlists: data.playlists || [], updatedAt: Number(rec.updatedAt) || 0 }, 200, noStore);
+      return json({ ok: true, addons: data.addons || [], updatedAt: Number(rec.updatedAt) || 0 }, 200, noStore);
     } catch (e) {
       console.error("tv setup: could not read", e);
       return json({ ok: false, error: "The stored setup could not be read." }, 500, noStore);
     }
   }
   const okUrl = (u) => typeof u === "string" && /^https?:\/\//i.test(u) && u.length <= TV_SETUP_URL_MAX;
-  if (body.action !== "set" || !Array.isArray(body.addons) || !Array.isArray(body.playlists) || body.addons.length > TV_SETUP_ADDONS_MAX || body.playlists.length > TV_SETUP_PLAYLISTS_MAX) {
-    return json({ ok: false, error: "Send action get, or set with addons and playlists (up to 50 and 20)." }, 400, noStore);
+  if (body.action !== "set" || !Array.isArray(body.addons) || body.addons.length > TV_SETUP_ADDONS_MAX) {
+    return json({ ok: false, error: "Send action get, or set with addons (up to 50)." }, 400, noStore);
   }
   const addons = body.addons.filter((a) => a && okUrl(a.url)).map((a) => ({ url: a.url, on: a.on !== false }));
-  const playlists = body.playlists.filter(okUrl);
   const updatedAt = Date.now();
-  await env.CONFIGS.put(key, JSON.stringify({ updatedAt, enc: await encryptToken(JSON.stringify({ addons, playlists }), env, tvSetupContext(username)) }));
-  return json({ ok: true, updatedAt, addons: addons.length, playlists: playlists.length }, 200, noStore);
+  await env.CONFIGS.put(key, JSON.stringify({ updatedAt, enc: await encryptToken(JSON.stringify({ addons }), env, tvSetupContext(username)) }));
+  return json({ ok: true, updatedAt, addons: addons.length }, 200, noStore);
 }

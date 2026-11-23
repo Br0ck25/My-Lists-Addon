@@ -2736,7 +2736,7 @@ New test in `tests/worker.test.mjs` ("passes a pick's runtime on"): a movie and 
 
 ## 2026-11-18 — My Lists TV setup on the account (prepared; not deployed)
 
-- **Added `POST /api/nuvio-tv/setup`** for the My Lists TV launcher. A signed-in TV profile saves its stream addons and IPTV playlists to its account (`action: "set"`, up to 50 addons and 20 playlists) and another TV paired to the same account reads them back (`action: "get"`), so a new TV needs only a sign-in. The links carry debrid keys and IPTV logins, so the record is stored in KV (`tvsetup:<username>`) **encrypted at rest** with `TOKEN_ENCRYPTION_KEY` (the install secrets' AES-GCM, bound to the account). **Without that key nothing is stored** (503). Only the pairing secret opens it; 60 requests a minute per account.
+- **Added `POST /api/nuvio-tv/setup`** for the My Lists TV launcher. A signed-in TV profile saves its stream addons to its account (`action: "set"`, up to 50 addons) and another TV paired to the same account reads them back (`action: "get"`), so a new TV needs only a sign-in. The links carry debrid keys, so the record is stored in KV (`tvsetup:<username>`) **encrypted at rest** with `TOKEN_ENCRYPTION_KEY` (the install secrets' AES-GCM, bound to the account). **Without that key nothing is stored** (503). Only the pairing secret opens it; 60 requests a minute per account.
 - Account deletion also removes the record (`tvsetup:` in the purge key list, on an existing line). Code in `src/api/84_tv-setup-routes.js`; one more clause on the existing delegating line in `handleNuvioTvHistoryRoute` (`25_`), no baseline grew.
 - The server (and so you, as its owner) can read these lists with the encryption key, which is the choice made over end-to-end encryption.
 
