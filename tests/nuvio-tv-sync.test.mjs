@@ -1117,7 +1117,13 @@ describe("My Lists TV progress", () => {
     const back = await post(env, { targetId: tv, action: "get" });
     assert.equal(back.status, 200); assert.equal(back.body.username, "tvprogress");
     assert.deepEqual(back.body.items.map((i) => [i.id, i.season, i.episode, i.positionMs]), [["tt0903747", 1, 4, 1200000]]);
-    assert.equal(back.body.items[0].name, "x" === "" ? "" : back.body.items[0].name);
+    assert.deepEqual(back.body.airing, [], "no Airing Next yet");
+    // Airing Next comes back soonest first.
+    const rec = JSON.parse(await env.CONFIGS.get("creatorsynctracking:tvprogress"));
+    rec.airingNext = [{ showId: "tt2", showTitle: "Later", seasonNum: 1, episodeNum: 2, airDate: "2026-12-20" }, { showId: "tt1", showTitle: "Sooner", showPoster: "p.jpg", seasonNum: 3, episodeNum: 4, airDate: "2026-12-01", isSeasonPremiere: true }];
+    await env.CONFIGS.put("creatorsynctracking:tvprogress", JSON.stringify(rec));
+    const again = await post(env, { targetId: tv, action: "get" });
+    assert.deepEqual(again.body.airing.map((a) => [a.id, a.airDate, a.premiere]), [["tt1", "2026-12-01", true], ["tt2", "2026-12-20", false]]);
     // Finishing it goes through history, which takes it out of Continue Watching.
     await call(env, "/api/nuvio-tv/history", { method: "POST", headers: { "origin": "https://mylistsaddon.com" }, json: { targetId: tv, type: "series", imdbId: "tt0903747", season: 1, episode: 4, completed: true } });
     assert.equal(JSON.parse(await env.CONFIGS.get("creatorsynctracking:tvprogress")).continueWatching.length, 0);

@@ -59,7 +59,7 @@ async function handleNuvioTvProgress(request, env, ctx) {
   return json({ ok: true, progress: entry.progress }, 200, corsHeaders());
 }
 
-// The account's Continue Watching, newest first: part-watched titles (with positionMs/durationMs) and next-up episodes (none).
+// The account's Continue Watching (the website's own order): part-watched titles (with positionMs/durationMs) and next-up episodes (none), and its Airing Next.
 async function tvContinueWatching(env, username) {
   const direct = await directPlayLoad(env, username);
   let blob = direct ? direct.blob : null;
@@ -76,5 +76,12 @@ async function tvContinueWatching(env, username) {
     poster: String(it.showPoster || it.poster || ""), thumbnail: String(it.thumbnail || ""), season: Number(it.seasonNum) || 0, episode: Number(it.episodeNum) || 0,
     positionMs: Number(it.positionMs) || 0, durationMs: Number(it.durationMs) || 0, watchedAt: Number(it.watchedAt) || 0,
   }));
-  return json({ ok: true, items, username }, 200, { ...corsHeaders(), "Cache-Control": "no-store" });
+  // Airing Next: the next episode of shows the account follows, soonest first.
+  const airingSrc = [blob, kvBlob].find((b) => b && Array.isArray(b.airingNext) && b.airingNext.length);
+  const airing = (airingSrc ? airingSrc.airingNext : []).filter((it) => it && (it.showId || it.id) && it.airDate).map((it) => ({
+    id: String(it.showId || it.id), name: String(it.showTitle || it.name || ""), poster: String(it.showPoster || it.poster || ""), still: String(it.poster || ""),
+    season: Number(it.seasonNum) || 0, episode: Number(it.episodeNum) || 0, airDate: String(it.airDate).slice(0, 10),
+    premiere: Boolean(it.isSeasonPremiere), finale: Boolean(it.isSeasonFinale),
+  })).sort((a, b) => a.airDate.localeCompare(b.airDate)).slice(0, 30);
+  return json({ ok: true, items, airing, username }, 200, { ...corsHeaders(), "Cache-Control": "no-store" });
 }
