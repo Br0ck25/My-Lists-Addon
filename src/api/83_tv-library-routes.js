@@ -19,7 +19,7 @@ async function handleNuvioTvLibrary(request, env, ctx) {
 
   const current = await readAccountWatchlist(env, username, null);
   const existing = current && Array.isArray(current.items) ? current.items : [];
-  if (body.action === "get") return json({ ok: true, items: existing, updatedAt: current ? Number(current.updatedAt) || 0 : 0 }, 200, { ...corsHeaders(), "Cache-Control": "no-store" });
+  if (body.action === "get") return json({ ok: true, items: existing, username, updatedAt: current ? Number(current.updatedAt) || 0 : 0 }, 200, { ...corsHeaders(), "Cache-Control": "no-store" });
   if (body.action !== "set" || !Array.isArray(body.items) || body.items.length > TV_LIBRARY_MAX) return json({ ok: false, error: "Send action get, or set with up to 500 items." }, 400, corsHeaders());
 
   const byId = new Map(existing.filter((it) => it && (it.id || it.imdbId)).map((it) => [String(it.id || it.imdbId), it]));

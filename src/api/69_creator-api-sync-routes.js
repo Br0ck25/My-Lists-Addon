@@ -833,7 +833,7 @@ async function handleNuvioTvDevicePoll(request, env, ctx, url) {
     return json({
       ok: true,
       status: "authenticated",
-      installId: record.installId,
+      installId: record.installId, username: record.claimedBy || "",
       manifestUrl: record.manifestUrl,
       syncUrl: record.syncUrl
     }, 200, { ...corsHeaders(), "Cache-Control": "no-store" });

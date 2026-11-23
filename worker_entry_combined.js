@@ -34,7 +34,7 @@ const WORKER_BUILD_DATE = "2026-11-23";
 // header.js plus the numbered files, so two pasted Workers carry the same
 // value only if they are the same code. /admin shows it beside the build date:
 // after pasting, compare it with what `python build.py` printed.
-const WORKER_BUILD = "ff4505ae0b";
+const WORKER_BUILD = "09994f2f57";
 
 // --- Trakt Continue Watching: how many shows get a "next episode" check -------
 //
@@ -120007,7 +120007,7 @@ async function handleNuvioTvDevicePoll(request, env, ctx, url) {
     return json({
       ok: true,
       status: "authenticated",
-      installId: record.installId,
+      installId: record.installId, username: record.claimedBy || "",
       manifestUrl: record.manifestUrl,
       syncUrl: record.syncUrl
     }, 200, { ...corsHeaders(), "Cache-Control": "no-store" });
@@ -130211,6 +130211,7 @@ async function fetchTraktWithRetry(url, options = {}, retries = 2) {
 // My Lists TV: where a signed-in box stopped part way through a title.
 //
 // POST /api/nuvio-tv/progress { targetId, type, imdbId, season?, episode?, name, poster?, showTitle?, positionMs, durationMs }
+// { targetId, action: "get" } returns the account's Continue Watching (what the website shows) for the TV's Home row.
 // Finished plays go to /api/nuvio-tv/history (which also clears the entry made here). This keeps two records of a
 // part-watched title: a playback position (watch_positions, so the Nuvio and Stremio sends pick it up) and a
 // Continue Watching entry with its percentage, so the website shows it. Under 2% in is just a start, 90% or more is
@@ -130227,6 +130228,8 @@ async function handleNuvioTvProgress(request, env, ctx) {
   if (!device) return json({ ok: false, error: "Target not found or not paired. Pair the TV again." }, 404, corsHeaders());
   const username = device.username;
   if (await consumeRateLimit(env, ctx, "tvprogress", username, 120, 60)) return json({ ok: false, error: "Too many requests." }, 429, corsHeaders());
+
+  if (body.action === "get") return tvContinueWatching(env, username);
 
   const imdbId = String(body.imdbId || "").trim();
   const isSeries = String(body.type || "").toLowerCase() === "series";
@@ -130265,6 +130268,26 @@ async function handleNuvioTvProgress(request, env, ctx) {
   }
   return json({ ok: true, progress: entry.progress }, 200, corsHeaders());
 }
+
+// The account's Continue Watching, newest first: part-watched titles (with positionMs/durationMs) and next-up episodes (none).
+async function tvContinueWatching(env, username) {
+  const direct = await directPlayLoad(env, username);
+  let blob = direct ? direct.blob : null;
+  if (!blob && env.DB) { try { blob = await readCreatorTrackingD1(env, username); } catch {} }
+  let kvBlob = null;
+  try { const raw = await env.CONFIGS.get(`creatorsynctracking:${username}`); if (raw) kvBlob = JSON.parse(raw); } catch {}
+  if (!blob) blob = kvBlob;
+  // The database copy keeps only the fields the website needs; the positions this route stored live in the KV copy.
+  const cwKey = (it) => `${it.showId || it.id}:${it.seasonNum || 0}:${it.episodeNum || 0}`;
+  const kvPos = new Map((kvBlob && Array.isArray(kvBlob.continueWatching) ? kvBlob.continueWatching : []).filter((it) => it && it.positionMs).map((it) => [cwKey(it), it]));
+  const withPos = (it) => { const k = kvPos.get(cwKey(it)); return it.positionMs || !k ? it : { ...it, positionMs: k.positionMs, durationMs: k.durationMs }; };
+  const items = (blob && Array.isArray(blob.continueWatching) ? blob.continueWatching : []).filter((it) => it).map(withPos).filter((it) => it && (it.showId || it.id)).slice(0, 30).map((it) => ({
+    id: String(it.showId || it.id), type: it.type === "movie" ? "movie" : "series", name: String(it.showTitle || it.name || ""), episodeName: it.type === "movie" ? "" : String(it.name || ""),
+    poster: String(it.showPoster || it.poster || ""), thumbnail: String(it.thumbnail || ""), season: Number(it.seasonNum) || 0, episode: Number(it.episodeNum) || 0,
+    positionMs: Number(it.positionMs) || 0, durationMs: Number(it.durationMs) || 0, watchedAt: Number(it.watchedAt) || 0,
+  }));
+  return json({ ok: true, items, username }, 200, { ...corsHeaders(), "Cache-Control": "no-store" });
+}
 // My Lists TV: the TV's Library is the account's Watchlist.
 //
 // POST /api/nuvio-tv/library { targetId, action: "get" }                      -> { ok, items, updatedAt }
@@ -130286,7 +130309,7 @@ async function handleNuvioTvLibrary(request, env, ctx) {
 
   const current = await readAccountWatchlist(env, username, null);
   const existing = current && Array.isArray(current.items) ? current.items : [];
-  if (body.action === "get") return json({ ok: true, items: existing, updatedAt: current ? Number(current.updatedAt) || 0 : 0 }, 200, { ...corsHeaders(), "Cache-Control": "no-store" });
+  if (body.action === "get") return json({ ok: true, items: existing, username, updatedAt: current ? Number(current.updatedAt) || 0 : 0 }, 200, { ...corsHeaders(), "Cache-Control": "no-store" });
   if (body.action !== "set" || !Array.isArray(body.items) || body.items.length > TV_LIBRARY_MAX) return json({ ok: false, error: "Send action get, or set with up to 500 items." }, 400, corsHeaders());
 
   const byId = new Map(existing.filter((it) => it && (it.id || it.imdbId)).map((it) => [String(it.id || it.imdbId), it]));
@@ -130328,11 +130351,11 @@ async function handleNuvioTvSetup(request, env, ctx) {
 
   if (body.action === "get") {
     const raw = await env.CONFIGS.get(key);
-    if (!raw) return json({ ok: true, addons: [], updatedAt: 0 }, 200, noStore);
+    if (!raw) return json({ ok: true, addons: [], updatedAt: 0, username }, 200, noStore);
     try {
       const rec = JSON.parse(raw);
       const data = JSON.parse(await decryptToken(rec.enc, env, tvSetupContext(username)));
-      return json({ ok: true, addons: data.addons || [], updatedAt: Number(rec.updatedAt) || 0 }, 200, noStore);
+      return json({ ok: true, addons: data.addons || [], updatedAt: Number(rec.updatedAt) || 0, username }, 200, noStore);
     } catch (e) {
       console.error("tv setup: could not read", e);
       return json({ ok: false, error: "The stored setup could not be read." }, 500, noStore);

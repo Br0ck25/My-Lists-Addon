@@ -25,11 +25,11 @@ async function handleNuvioTvSetup(request, env, ctx) {
 
   if (body.action === "get") {
     const raw = await env.CONFIGS.get(key);
-    if (!raw) return json({ ok: true, addons: [], updatedAt: 0 }, 200, noStore);
+    if (!raw) return json({ ok: true, addons: [], updatedAt: 0, username }, 200, noStore);
     try {
       const rec = JSON.parse(raw);
       const data = JSON.parse(await decryptToken(rec.enc, env, tvSetupContext(username)));
-      return json({ ok: true, addons: data.addons || [], updatedAt: Number(rec.updatedAt) || 0 }, 200, noStore);
+      return json({ ok: true, addons: data.addons || [], updatedAt: Number(rec.updatedAt) || 0, username }, 200, noStore);
     } catch (e) {
       console.error("tv setup: could not read", e);
       return json({ ok: false, error: "The stored setup could not be read." }, 500, noStore);

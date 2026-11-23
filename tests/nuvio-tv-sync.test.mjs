@@ -1113,6 +1113,11 @@ describe("My Lists TV progress", () => {
     await post(env, { targetId: tv, type: "series", imdbId: "tt0903747", season: 1, episode: 4, name: "Cancer Man", positionMs: 1200000, durationMs: 2400000 });
     const cw2 = JSON.parse(await env.CONFIGS.get("creatorsynctracking:tvprogress")).continueWatching;
     assert.deepEqual(cw2.map((e) => e.episodeNum), [4]);
+    // The TV can read the account's Continue Watching back, with the account name.
+    const back = await post(env, { targetId: tv, action: "get" });
+    assert.equal(back.status, 200); assert.equal(back.body.username, "tvprogress");
+    assert.deepEqual(back.body.items.map((i) => [i.id, i.season, i.episode, i.positionMs]), [["tt0903747", 1, 4, 1200000]]);
+    assert.equal(back.body.items[0].name, "x" === "" ? "" : back.body.items[0].name);
     // Finishing it goes through history, which takes it out of Continue Watching.
     await call(env, "/api/nuvio-tv/history", { method: "POST", headers: { "origin": "https://mylistsaddon.com" }, json: { targetId: tv, type: "series", imdbId: "tt0903747", season: 1, episode: 4, completed: true } });
     assert.equal(JSON.parse(await env.CONFIGS.get("creatorsynctracking:tvprogress")).continueWatching.length, 0);

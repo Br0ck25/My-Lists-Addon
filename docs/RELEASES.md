@@ -2817,3 +2817,15 @@ Owner decisions of 2026-11-10 on the open items of `docs/audit-2026-11-10/`. Rea
 ### Checked
 `tests/perf-direct-play.test.mjs` (34 tests). The cost test failed first (2 full history reads per play); the behaviour tests pin the old way's results and run on both ways. `bash verify.sh -q`: see the commit.
 
+
+## 2026-11-23 — My Lists TV: account name and Continue Watching read-back (prepared; not deployed)
+
+- **`/api/nuvio-tv/device/poll`** now also returns `username` (the account that approved the TV), and the TV's `library` and `setup` "get" answers carry `username`, so the launcher can show "Signed in as <name>".
+- **`POST /api/nuvio-tv/progress` with `action: "get"`** returns the account's Continue Watching (up to 30: id, type, name, episode name, poster, season, episode, position, duration, watchedAt) for the launcher's Home row. Positions stored by this route live in the KV copy; the database copy keeps only the website's fields, so the answer joins the two by show and episode.
+- No new route and no baseline grew (the `username` fields went on existing lines).
+
+### Owner steps
+1. Paste the new Worker.
+
+### Checked
+`tests/nuvio-tv-sync.test.mjs`: the read-back returns the stored position and the account name.

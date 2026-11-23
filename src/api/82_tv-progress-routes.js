@@ -1,6 +1,7 @@
 // My Lists TV: where a signed-in box stopped part way through a title.
 //
 // POST /api/nuvio-tv/progress { targetId, type, imdbId, season?, episode?, name, poster?, showTitle?, positionMs, durationMs }
+// { targetId, action: "get" } returns the account's Continue Watching (what the website shows) for the TV's Home row.
 // Finished plays go to /api/nuvio-tv/history (which also clears the entry made here). This keeps two records of a
 // part-watched title: a playback position (watch_positions, so the Nuvio and Stremio sends pick it up) and a
 // Continue Watching entry with its percentage, so the website shows it. Under 2% in is just a start, 90% or more is
@@ -17,6 +18,8 @@ async function handleNuvioTvProgress(request, env, ctx) {
   if (!device) return json({ ok: false, error: "Target not found or not paired. Pair the TV again." }, 404, corsHeaders());
   const username = device.username;
   if (await consumeRateLimit(env, ctx, "tvprogress", username, 120, 60)) return json({ ok: false, error: "Too many requests." }, 429, corsHeaders());
+
+  if (body.action === "get") return tvContinueWatching(env, username);
 
   const imdbId = String(body.imdbId || "").trim();
   const isSeries = String(body.type || "").toLowerCase() === "series";
@@ -54,4 +57,24 @@ async function handleNuvioTvProgress(request, env, ctx) {
     if (env.DB) { try { await saveCreatorTrackingD1(env, username, blob, false); } catch {} }
   }
   return json({ ok: true, progress: entry.progress }, 200, corsHeaders());
+}
+
+// The account's Continue Watching, newest first: part-watched titles (with positionMs/durationMs) and next-up episodes (none).
+async function tvContinueWatching(env, username) {
+  const direct = await directPlayLoad(env, username);
+  let blob = direct ? direct.blob : null;
+  if (!blob && env.DB) { try { blob = await readCreatorTrackingD1(env, username); } catch {} }
+  let kvBlob = null;
+  try { const raw = await env.CONFIGS.get(`creatorsynctracking:${username}`); if (raw) kvBlob = JSON.parse(raw); } catch {}
+  if (!blob) blob = kvBlob;
+  // The database copy keeps only the fields the website needs; the positions this route stored live in the KV copy.
+  const cwKey = (it) => `${it.showId || it.id}:${it.seasonNum || 0}:${it.episodeNum || 0}`;
+  const kvPos = new Map((kvBlob && Array.isArray(kvBlob.continueWatching) ? kvBlob.continueWatching : []).filter((it) => it && it.positionMs).map((it) => [cwKey(it), it]));
+  const withPos = (it) => { const k = kvPos.get(cwKey(it)); return it.positionMs || !k ? it : { ...it, positionMs: k.positionMs, durationMs: k.durationMs }; };
+  const items = (blob && Array.isArray(blob.continueWatching) ? blob.continueWatching : []).filter((it) => it).map(withPos).filter((it) => it && (it.showId || it.id)).slice(0, 30).map((it) => ({
+    id: String(it.showId || it.id), type: it.type === "movie" ? "movie" : "series", name: String(it.showTitle || it.name || ""), episodeName: it.type === "movie" ? "" : String(it.name || ""),
+    poster: String(it.showPoster || it.poster || ""), thumbnail: String(it.thumbnail || ""), season: Number(it.seasonNum) || 0, episode: Number(it.episodeNum) || 0,
+    positionMs: Number(it.positionMs) || 0, durationMs: Number(it.durationMs) || 0, watchedAt: Number(it.watchedAt) || 0,
+  }));
+  return json({ ok: true, items, username }, 200, { ...corsHeaders(), "Cache-Control": "no-store" });
 }
