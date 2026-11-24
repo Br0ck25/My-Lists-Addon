@@ -66,16 +66,22 @@ async function handleNuvioTvWholeShowAdd(env, ctx, username, { imdbId, lookupId,
   return json({ ok: true, success: true, episodes: entries.length }, 200, corsHeaders());
 }
 
+// Saves a record that has had plays taken out. For an account on the activity database the flag is what makes the save
+// delete the matching watch_events rows and rebuild the show's progress; without it the plays come back from there.
+async function tvSaveTrackingRemoval(env, username, blob) {
+  blob.updatedAt = Date.now();
+  const stored = isEventTrackingEnabled(env) ? { ...blob, _intentionalRemoval: true } : blob;
+  await env.CONFIGS.put(`creatorsynctracking:${username}`, JSON.stringify(stored));
+  if (env.DB) { try { await saveCreatorTrackingD1(env, username, blob, true); } catch {} }
+}
+
 // The record with the show's plays and its "fully watched" mark gone. `intentional` tells an account on the activity
 // database that leaving the plays out is a removal.
 async function handleNuvioTvWholeShowRemove(env, username, imdbId) {
   const blob = await tvLoadTrackingBlob(env, username);
   blob.watchHistory = blob.watchHistory.filter((it) => it && it.showId !== imdbId && it.id !== imdbId);
   blob.fullyWatchedShowIds = blob.fullyWatchedShowIds.filter((id) => String(id) !== imdbId);
-  blob.updatedAt = Date.now();
-  const stored = isEventTrackingEnabled(env) ? { ...blob, _intentionalRemoval: true } : blob;
-  await env.CONFIGS.put(`creatorsynctracking:${username}`, JSON.stringify(stored));
-  if (env.DB) { try { await saveCreatorTrackingD1(env, username, blob, true); } catch {} }
+  await tvSaveTrackingRemoval(env, username, blob);
   return json({ ok: true, success: true }, 200, corsHeaders());
 }
 

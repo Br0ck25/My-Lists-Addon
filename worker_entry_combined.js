@@ -34,7 +34,7 @@ const WORKER_BUILD_DATE = "2026-11-24";
 // header.js plus the numbered files, so two pasted Workers carry the same
 // value only if they are the same code. /admin shows it beside the build date:
 // after pasting, compare it with what `python build.py` printed.
-const WORKER_BUILD = "e121220cbc";
+const WORKER_BUILD = "b12a918d47";
 
 // --- Trakt Continue Watching: how many shows get a "next episode" check -------
 //
@@ -93916,11 +93916,11 @@ async function handleNuvioTvHistoryRemove(env, username, body) {
     });
   }
 
-  blob.updatedAt = Date.now();
-  await env.CONFIGS.put(syncKey, JSON.stringify(blob));
-  if (env.DB) {
-    try { await saveCreatorTrackingD1(env, username, blob, true); } catch {}
+  // A show that lost a play is no longer finished.
+  if (isSeries && Array.isArray(blob.fullyWatchedShowIds)) {
+    blob.fullyWatchedShowIds = blob.fullyWatchedShowIds.filter((id) => ![imdbId, contentId.split(":")[0]].includes(String(id)));
   }
+  await tvSaveTrackingRemoval(env, username, blob);
   return json({ ok: true, success: true }, 200, corsHeaders());
 }
 
@@ -130468,16 +130468,22 @@ async function handleNuvioTvWholeShowAdd(env, ctx, username, { imdbId, lookupId,
   return json({ ok: true, success: true, episodes: entries.length }, 200, corsHeaders());
 }
 
+// Saves a record that has had plays taken out. For an account on the activity database the flag is what makes the save
+// delete the matching watch_events rows and rebuild the show's progress; without it the plays come back from there.
+async function tvSaveTrackingRemoval(env, username, blob) {
+  blob.updatedAt = Date.now();
+  const stored = isEventTrackingEnabled(env) ? { ...blob, _intentionalRemoval: true } : blob;
+  await env.CONFIGS.put(`creatorsynctracking:${username}`, JSON.stringify(stored));
+  if (env.DB) { try { await saveCreatorTrackingD1(env, username, blob, true); } catch {} }
+}
+
 // The record with the show's plays and its "fully watched" mark gone. `intentional` tells an account on the activity
 // database that leaving the plays out is a removal.
 async function handleNuvioTvWholeShowRemove(env, username, imdbId) {
   const blob = await tvLoadTrackingBlob(env, username);
   blob.watchHistory = blob.watchHistory.filter((it) => it && it.showId !== imdbId && it.id !== imdbId);
   blob.fullyWatchedShowIds = blob.fullyWatchedShowIds.filter((id) => String(id) !== imdbId);
-  blob.updatedAt = Date.now();
-  const stored = isEventTrackingEnabled(env) ? { ...blob, _intentionalRemoval: true } : blob;
-  await env.CONFIGS.put(`creatorsynctracking:${username}`, JSON.stringify(stored));
-  if (env.DB) { try { await saveCreatorTrackingD1(env, username, blob, true); } catch {} }
+  await tvSaveTrackingRemoval(env, username, blob);
   return json({ ok: true, success: true }, 200, corsHeaders());
 }
 

@@ -1138,11 +1138,11 @@ async function handleNuvioTvHistoryRemove(env, username, body) {
     });
   }
 
-  blob.updatedAt = Date.now();
-  await env.CONFIGS.put(syncKey, JSON.stringify(blob));
-  if (env.DB) {
-    try { await saveCreatorTrackingD1(env, username, blob, true); } catch {}
+  // A show that lost a play is no longer finished.
+  if (isSeries && Array.isArray(blob.fullyWatchedShowIds)) {
+    blob.fullyWatchedShowIds = blob.fullyWatchedShowIds.filter((id) => ![imdbId, contentId.split(":")[0]].includes(String(id)));
   }
+  await tvSaveTrackingRemoval(env, username, blob);
   return json({ ok: true, success: true }, 200, corsHeaders());
 }
 
