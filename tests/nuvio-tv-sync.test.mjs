@@ -356,13 +356,21 @@ describe("Nuvio TV Launcher - Unified Sync Route (/api/nuvio-tv/sync/:target)", 
     const res = await call(env, "/link?code=MTC-WGT");
     assert.equal(res.status, 200);
     assert.ok(res.text.includes("MTC-WGT"), "contains pairing code");
-    assert.ok(res.text.includes("Link Nuvio TV Launcher"), "contains title");
+    assert.ok(res.text.includes("Link My Lists TV"), "contains title");
     assert.ok(res.text.includes("Link TV Now"), "contains link button");
     assert.ok(res.text.includes('<style nonce="'), "style has CSP nonce placeholder or nonce");
     assert.ok(res.text.includes('<script nonce="'), "script has CSP nonce placeholder or nonce");
     assert.ok(res.text.includes('id="successBox" style="display:none;"'), "successBox has inline display:none");
     assert.ok(res.text.includes('id="errorMsg" style="display:none;"'), "errorMsg has inline display:none");
     assert.ok(res.text.includes("dark-theme"), "supports theme detection");
+  });
+
+  it("GET /link with no code lets the visitor type one; with a code it does not", async () => {
+    const env = makeEnv({ DB: makeD1(), CONFIGS: makeKv() });
+    const bare = await call(env, "/link");
+    assert.ok(bare.text.includes('id="tvCodeInput"'), "code entry box present without a code");
+    assert.ok(bare.text.includes("tvCodeInput.value") || bare.text.includes("codeInput.value"), "typed code is used when linking");
+    assert.equal((await call(env, "/link?code=MTC-WGT")).text.includes('id="tvCodeInput"'), false);
   });
 
   it("GET /?source=nuvio_tv&tv_code=MTC-WGT redirects to /link?code=MTC-WGT", async () => {

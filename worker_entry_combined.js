@@ -34,7 +34,7 @@ const WORKER_BUILD_DATE = "2026-11-24";
 // header.js plus the numbered files, so two pasted Workers carry the same
 // value only if they are the same code. /admin shows it beside the build date:
 // after pasting, compare it with what `python build.py` printed.
-const WORKER_BUILD = "cd91f09bfc";
+const WORKER_BUILD = "2bbbbccfb2";
 
 // --- Trakt Continue Watching: how many shows get a "next episode" check -------
 //
@@ -93669,6 +93669,15 @@ function buildNuvioTvLinkPageJs(codeParam) {
     var codeDisplay = document.getElementById('tvCodeDisplay');
     if (code && codeDisplay) codeDisplay.textContent = code;
 
+    var codeInput = document.getElementById('tvCodeInput');
+    var confirmBtn0 = document.getElementById('confirmLinkBtn');
+    if (codeInput) {
+      codeInput.addEventListener('input', function() {
+        code = codeInput.value.trim().toUpperCase();
+        if (confirmBtn0) confirmBtn0.disabled = !code;
+      });
+    }
+
     var userPill = document.getElementById('userPill');
     var signedInView = document.getElementById('signedInView');
     var registerView = document.getElementById('registerView');
@@ -93777,7 +93786,7 @@ function handleNuvioTvLinkPage(request, env, ctx, url, path) {
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Link Nuvio TV Launcher &bull; My Lists Addon</title>
+  <title>Link My Lists TV &bull; My Lists Addon</title>
   <script nonce="${CSP_NONCE_PLACEHOLDER}">try { if (localStorage.getItem('theme') === 'dark' || (!localStorage.getItem('theme') && matchMedia('(prefers-color-scheme: dark)').matches)) document.documentElement.classList.add('dark-theme'); } catch (e) {}<\/script>
   <style nonce="${CSP_NONCE_PLACEHOLDER}">
 ${DESIGN_TOKENS_CSS}
@@ -93787,12 +93796,13 @@ ${css}
 <body>
   <div class="card">
     <div class="logo">&#128250;</div>
-    <h1>Link Nuvio TV Launcher</h1>
+    <h1>Link My Lists TV</h1>
     <p class="sub">Connect your My Lists Addon account to sync your Catalogs, Collections, and Channels to your TV.</p>
 
     <div class="code-box">
       <div class="code-label">Pairing Code</div>
-      <div class="code-val" id="tvCodeDisplay">${safeCode || "&mdash;"}</div>
+      ${codeParam ? "" : '<input type="text" id="tvCodeInput" class="input-field" placeholder="Enter the code from your TV" maxlength="7" autocomplete="off" autocapitalize="characters">'}
+      <div class="code-val" id="tvCodeDisplay"${codeParam ? "" : ' style="display:none;"'}>${safeCode || "&mdash;"}</div>
       <div class="user-pill" id="userPill">Checking account status&hellip;</div>
     </div>
 
@@ -93805,7 +93815,7 @@ ${css}
 
     <div id="actionArea">
       <div id="signedInView" style="display:none;">
-        ${codeParam ? "" : '<p class="sub" id="noCodeHint">Open this page from the code shown on your TV.</p>'}
+        ${codeParam ? "" : '<p class="sub" id="noCodeHint">Type the code shown on your TV above.</p>'}
         <button type="button" class="btn btn-primary" id="confirmLinkBtn"${codeParam ? "" : " disabled"}>Link TV Now</button>
         <a href="/" class="btn btn-secondary">Cancel</a>
       </div>
