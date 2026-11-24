@@ -34,7 +34,7 @@ const WORKER_BUILD_DATE = "2026-11-24";
 // header.js plus the numbered files, so two pasted Workers carry the same
 // value only if they are the same code. /admin shows it beside the build date:
 // after pasting, compare it with what `python build.py` printed.
-const WORKER_BUILD = "2bbbbccfb2";
+const WORKER_BUILD = "e121220cbc";
 
 // --- Trakt Continue Watching: how many shows get a "next episode" check -------
 //
@@ -83550,7 +83550,7 @@ function openNuvioTvPairingModal(tvCode) {
 
   showModal(
     '<button type="button" class="modal-close-x" aria-label="Close" data-act="closeModal">\u2715</button>' +
-    '<h2>Link Nuvio TV Launcher</h2>' +
+    '<h2>Link My Lists TV</h2>' +
     '<div class="u-mt-12px u-mb-12px u-p-14px" style="background:var(--color-bg-subtle);border:1px solid var(--color-border);border-radius:var(--radius-md);text-align:center;">' +
       '<div style="font-size:var(--font-size-xs);color:var(--color-text-muted);text-transform:uppercase;font-weight:600;letter-spacing:0.05em;">Pairing Code</div>' +
       '<div style="font-size:24px;font-weight:800;letter-spacing:0.12em;color:var(--color-brand);margin:4px 0;">' + escapeHtml(tvCode) + '</div>' +
@@ -83614,7 +83614,7 @@ function showNuvioTvPairingSuccessModal(tvCode) {
 function openNuvioTvAuthModal(tvCode) {
   showModal(
     '<button type="button" class="modal-close-x" aria-label="Close" data-act="closeModal">\u2715</button>' +
-    '<h2>Link Nuvio TV Launcher</h2>' +
+    '<h2>Link My Lists TV</h2>' +
     '<div class="u-mt-12px u-mb-12px u-p-14px" style="background:var(--color-bg-subtle);border:1px solid var(--color-border);border-radius:var(--radius-md);text-align:center;">' +
       '<div style="font-size:var(--font-size-xs);color:var(--color-text-muted);text-transform:uppercase;font-weight:600;letter-spacing:0.05em;">Pairing Code</div>' +
       '<div style="font-size:22px;font-weight:800;letter-spacing:0.12em;color:var(--color-brand);margin:4px 0;">' + escapeHtml(tvCode) + '</div>' +
