@@ -2823,6 +2823,8 @@ Owner decisions of 2026-11-10 on the open items of `docs/audit-2026-11-10/`. Rea
 - **`/api/nuvio-tv/device/poll`** now also returns `username` (the account that approved the TV), and the TV's `library` and `setup` "get" answers carry `username`, so the launcher can show "Signed in as <name>".
 - **`POST /api/nuvio-tv/progress` with `action: "get"`** returns the account's Continue Watching (up to 30: id, type, name, episode name, poster, season, episode, position, duration, watchedAt) for the launcher's Home row. Positions stored by this route live in the KV copy; the database copy keeps only the website's fields, so the answer joins the two by show and episode.
 - The same "get" answer also carries `airing`: the account's Airing Next (show id and title, poster, episode still, season, episode, air date, premiere/finale), soonest first, for the launcher's Airing next row.
+- **`POST /api/nuvio-tv/history` with `whole: true`** (series, `imdbId`, no season/episode) records every aired episode, adds the show to `fullyWatchedShowIds` and clears it from Continue Watching and the Watchlist; `/history/remove` with `whole: true` removes the show's plays and its fully-watched mark. A series request with neither season/episode nor `whole: true` is now a 400 (it used to mean S1E1). Code in `src/api/85_tv-watched-routes.js`.
+- **New route `POST /api/nuvio-tv/watched { targetId, action: "get" }`** returns `{ ok, movies: ["tt.."], shows: [{ id, complete, episodes: ["1:2"] }] }` (IMDb ids only, capped at 5,000 movies / 500 shows, `Cache-Control: no-store`) for the launcher's watched check marks.
 - No new route and no baseline grew (the `username` fields went on existing lines).
 
 ### Owner steps

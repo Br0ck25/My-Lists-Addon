@@ -1062,6 +1062,9 @@ ${css}
 }
 
 async function handleNuvioTvHistoryRemove(env, username, body) {
+  const wholeId = body && body.whole === true && body.season == null && body.episode == null ? String(body.imdbId || "").trim() : "";
+  if (body && body.whole === true && !/^tt\d+$/.test(wholeId)) return json({ ok: false, error: "whole:true needs the show's imdbId." }, 400, corsHeaders());
+  if (wholeId) return handleNuvioTvWholeShowRemove(env, username, wholeId);
   await ensureTrackingMigrated(env, username);
   const syncKey = `creatorsynctracking:${username}`;
   let blob = null;
@@ -1190,6 +1193,12 @@ async function handleNuvioTvHistoryAdd(env, ctx, username, body) {
   const watchedAt = Number(body && body.watchedAt) || Date.now();
   const lookupId = imdbId || (tmdbId ? `tmdb:${tmdbId}` : contentId);
 
+  // A series play names its episode. Marking the whole show is its own explicit request, never a guess of S1E1.
+  if (isSeries && (season == null || episode == null)) {
+    if (!(body && body.whole === true && /^tt\d+$/.test(imdbId))) return json({ ok: false, error: "A series needs season and episode, or whole:true with its imdbId." }, 400, corsHeaders());
+    return handleNuvioTvWholeShowAdd(env, ctx, username, { imdbId, lookupId, watchedAt });
+  }
+
   if (isSeries) {
     const epNum = episode != null ? episode : 1;
     const sNum = season != null ? season : 1;
@@ -1294,7 +1303,7 @@ async function handleNuvioTvHistoryAdd(env, ctx, username, body) {
 }
 
 async function handleNuvioTvHistoryRoute(request, env, ctx, url, path) {
-  if (path === "/api/nuvio-tv/progress") return handleNuvioTvProgress(request, env, ctx); if (path === "/api/nuvio-tv/library") return handleNuvioTvLibrary(request, env, ctx); if (path === "/api/nuvio-tv/setup") return handleNuvioTvSetup(request, env, ctx); if (path !== "/api/nuvio-tv/history" && path !== "/api/nuvio-tv/history/remove") return null;
+  if (path === "/api/nuvio-tv/progress") return handleNuvioTvProgress(request, env, ctx); if (path === "/api/nuvio-tv/library") return handleNuvioTvLibrary(request, env, ctx); if (path === "/api/nuvio-tv/setup") return handleNuvioTvSetup(request, env, ctx); if (path !== "/api/nuvio-tv/history" && path !== "/api/nuvio-tv/history/remove" && path !== "/api/nuvio-tv/watched") return null;
   if (path === "/api/nuvio-tv/history" || path === "/api/nuvio-tv/history/remove") {
     // Exact route match recognized by route-access scanner
   }
@@ -1331,6 +1340,10 @@ async function handleNuvioTvHistoryRoute(request, env, ctx, url, path) {
   }
   const username = device.username;
 
+  if (path === "/api/nuvio-tv/watched") {
+    if (!body || body.action !== "get") return json({ ok: false, error: "Unknown action." }, 400, corsHeaders());
+    return handleNuvioTvWatched(env, username);
+  }
   if (path === "/api/nuvio-tv/history/remove" || (body && body.action === "remove")) {
     return handleNuvioTvHistoryRemove(env, username, body);
   }
