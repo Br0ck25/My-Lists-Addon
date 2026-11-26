@@ -1976,7 +1976,7 @@ const ADMIN_AUDIT_ACTIONS = {
   "/admin/api/migrate-day-counts": "admin.migrate.day-counts",
   "/admin/api/backfill-trending": "admin.backfill.trending",
   "/admin/api/support-goal": "admin.support-goal.set",
-  "/admin/api/site-notice": "admin.site-notice.set",
+  "/admin/api/site-notice": "admin.site-notice.set", "/admin/api/default-manifest": "admin.default-manifest.set",
   "/admin/api/new-on-streaming/sweep": "admin.new-on-streaming.sweep",
   "/admin/api/new-on-streaming/add": "admin.new-on-streaming.add",
   "/admin/api/installs/restore": "admin.installs.undo-move",
@@ -2944,7 +2944,7 @@ ${UTILITY_CSS}
   </div>
   <div class="admin-subnav-bar" id="adminSubnavSite" style="display:none;">
     <button type="button" class="subnav-pill" data-sub-tab="supportgoal" data-act="switchAdminSubTab" data-act-args="${adminActArgs(['supportgoal'])}">Support goal</button>
-    <button type="button" class="subnav-pill" data-sub-tab="sitenotice" data-act="switchAdminSubTab" data-act-args="${adminActArgs(['sitenotice'])}">Site notice</button>
+    <button type="button" class="subnav-pill" data-sub-tab="sitenotice" data-act="switchAdminSubTab" data-act-args="${adminActArgs(['sitenotice'])}">Site notice</button> <button type="button" class="subnav-pill" data-sub-tab="defaultmanifest" data-act="switchAdminSubTab" data-act-args="${adminActArgs(['defaultmanifest'])}">Default addon link</button>
     <button type="button" class="subnav-pill" data-sub-tab="maintenance" data-act="switchAdminSubTab" data-act-args="${adminActArgs(['maintenance'])}">Maintenance</button>
   </div>
 
@@ -3356,7 +3356,7 @@ ${UTILITY_CSS}
       </div>
     </div>
   </div>
-
+${defaultManifestAdminPanel()}
   <div class="admin-tab-panel" data-admin-panel="newonstreaming">
     <p class="u-c-v_muted u-mt-0 u-fs-v_font_size_base">The <strong>New on Streaming</strong> catalog &mdash; what actually arrived on a streaming service, newest first, with a show pushed back to the top the day a new episode airs. It is a real catalog row right now and can be installed into Stremio or Nuvio from the URLs below; it is in the My Lists Addon Charts section of Quick Add and in Discover.</p>
     <p class="u-c-v_muted u-m-0_0_16px u-fs-v_font_size_sm">Powered by RapidAPI's <strong>Streaming Availability API</strong> (/changes) to capture the exact date titles and new episodes are added to streaming services (not release dates), with new arrivals first and recent episodes bumping shows to the top within a rolling 30-day window.</p>
@@ -3615,7 +3615,7 @@ ${UTILITY_CSS}
       newonstreaming: 'content',
       channelpresets: 'content',
       supportgoal: 'site',
-      sitenotice: 'site',
+      sitenotice: 'site', defaultmanifest: 'site',
       maintenance: 'site',
     };
 
@@ -3668,7 +3668,7 @@ ${UTILITY_CSS}
       if (tabId === 'newonstreaming' && !window._newOnStreamingLoadedOnce) { window._newOnStreamingLoadedOnce = true; loadNewOnStreaming(); }
       if (tabId === 'channelpresets' && !window._channelPresetsLoadedOnce) { window._channelPresetsLoadedOnce = true; loadChannelPresets(); }
       if (tabId === 'supportgoal' && !window._supportGoalLoadedOnce) { window._supportGoalLoadedOnce = true; loadSupportGoal(); }
-      if (tabId === 'sitenotice' && !window._siteNoticeLoadedOnce) { window._siteNoticeLoadedOnce = true; loadSiteNotice(); }
+      if (tabId === 'sitenotice' && !window._siteNoticeLoadedOnce) { window._siteNoticeLoadedOnce = true; loadSiteNotice(); } if (tabId === 'defaultmanifest' && !window._defaultManifestLoadedOnce) { window._defaultManifestLoadedOnce = true; loadDefaultManifest(); }
     }
 
     async function loadSupportGoal() {
@@ -3790,7 +3790,7 @@ ${UTILITY_CSS}
         say('Could not restore.', '#ff453a');
       }
     }
-
+${defaultManifestAdminScript()}
     function restoreAdminActiveTab() {
       let targetTab = '';
       const hashTab = (window.location.hash || '').replace(/^#/, '').trim();

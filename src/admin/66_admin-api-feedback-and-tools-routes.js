@@ -20,6 +20,7 @@ async function handleAdminApiFeedbackAndToolsRoutes(request, env, ctx, url, path
   if (path === "/admin/api/apiusage" && request.method === "GET") return adminApiApiusage(request, env);
   if (path === "/admin/api/support-goal" && (request.method === "GET" || request.method === "POST")) return adminApiSupportGoal(request, env, url);
   if (path === "/admin/api/site-notice" && (request.method === "GET" || request.method === "POST")) return adminApiSiteNotice(request, env);
+  if (path === "/admin/api/default-manifest" && (request.method === "GET" || request.method === "POST")) return adminApiDefaultManifest(request, env);
   if (path === "/admin/api/new-on-streaming" && request.method === "GET") return adminApiNewOnStreaming(request, env);
   if (path === "/admin/api/new-on-streaming/sweep" && request.method === "POST") return adminApiNewOnStreamingSweep(request, env, ctx);
   if (path === "/admin/api/new-on-streaming/preview" && request.method === "GET") return adminApiNewOnStreamingPreview(request, env, ctx, url);

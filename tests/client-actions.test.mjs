@@ -24,13 +24,14 @@ import { listSources } from "./sources.mjs";
 
 const REPO_ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 
-// src/admin/03_admin.js is the /admin page. It is not in this bundle (the builder page's
+// src/admin/03_admin.js is the /admin page, and so is 04_default-manifest-admin-ui.js, a
+// panel and script it pulls in because 03_admin.js may not grow. It is not in this bundle (the builder page's
 // markup comes from 09_..24_ only) and it does not load the bundle either --
 // P6-10 gave it its own copy of this contract, covered by
 // tests/admin-actions.test.mjs.
 function clientSources() {
   return listSources(REPO_ROOT)
-    .filter((f) => /(?:^|\/)[0-9][0-9]_/.test(f) && f !== "src/admin/03_admin.js")
+    .filter((f) => /(?:^|\/)[0-9][0-9]_/.test(f) && f !== "src/admin/03_admin.js" && f !== "src/admin/04_default-manifest-admin-ui.js")
     .map((f) => ({ file: f, text: fs.readFileSync(path.join(REPO_ROOT, f), "utf8") }));
 }
 

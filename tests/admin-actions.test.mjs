@@ -26,7 +26,10 @@ import { fileURLToPath } from "node:url";
 import { call, createUser, makeEnv } from "./harness.mjs";
 
 const REPO_ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
-const ADMIN_SRC = fs.readFileSync(path.join(REPO_ROOT, "src/admin/03_admin.js"), "utf8");
+// The /admin page's source: 03_admin.js plus the panel and script it pulls in from
+// 04_default-manifest-admin-ui.js (03_admin.js may not grow).
+const ADMIN_SRC = ["src/admin/03_admin.js", "src/admin/04_default-manifest-admin-ui.js"]
+  .map((f) => fs.readFileSync(path.join(REPO_ROOT, f), "utf8")).join("\n");
 
 // The dashboard, through the real request path: sign in, then ask for /admin.
 // (Same helper tests/worker.test.mjs uses for every admin route.)

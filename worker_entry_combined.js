@@ -34,7 +34,7 @@ const WORKER_BUILD_DATE = "2026-11-26";
 // header.js plus the numbered files, so two pasted Workers carry the same
 // value only if they are the same code. /admin shows it beside the build date:
 // after pasting, compare it with what `python build.py` printed.
-const WORKER_BUILD = "666ee9bf47";
+const WORKER_BUILD = "1ade187af9";
 
 // --- Trakt Continue Watching: how many shows get a "next episode" check -------
 //
@@ -12852,7 +12852,7 @@ const ADMIN_AUDIT_ACTIONS = {
   "/admin/api/migrate-day-counts": "admin.migrate.day-counts",
   "/admin/api/backfill-trending": "admin.backfill.trending",
   "/admin/api/support-goal": "admin.support-goal.set",
-  "/admin/api/site-notice": "admin.site-notice.set",
+  "/admin/api/site-notice": "admin.site-notice.set", "/admin/api/default-manifest": "admin.default-manifest.set",
   "/admin/api/new-on-streaming/sweep": "admin.new-on-streaming.sweep",
   "/admin/api/new-on-streaming/add": "admin.new-on-streaming.add",
   "/admin/api/installs/restore": "admin.installs.undo-move",
@@ -13820,7 +13820,7 @@ ${UTILITY_CSS}
   </div>
   <div class="admin-subnav-bar" id="adminSubnavSite" style="display:none;">
     <button type="button" class="subnav-pill" data-sub-tab="supportgoal" data-act="switchAdminSubTab" data-act-args="${adminActArgs(['supportgoal'])}">Support goal</button>
-    <button type="button" class="subnav-pill" data-sub-tab="sitenotice" data-act="switchAdminSubTab" data-act-args="${adminActArgs(['sitenotice'])}">Site notice</button>
+    <button type="button" class="subnav-pill" data-sub-tab="sitenotice" data-act="switchAdminSubTab" data-act-args="${adminActArgs(['sitenotice'])}">Site notice</button> <button type="button" class="subnav-pill" data-sub-tab="defaultmanifest" data-act="switchAdminSubTab" data-act-args="${adminActArgs(['defaultmanifest'])}">Default addon link</button>
     <button type="button" class="subnav-pill" data-sub-tab="maintenance" data-act="switchAdminSubTab" data-act-args="${adminActArgs(['maintenance'])}">Maintenance</button>
   </div>
 
@@ -14232,7 +14232,7 @@ ${UTILITY_CSS}
       </div>
     </div>
   </div>
-
+${defaultManifestAdminPanel()}
   <div class="admin-tab-panel" data-admin-panel="newonstreaming">
     <p class="u-c-v_muted u-mt-0 u-fs-v_font_size_base">The <strong>New on Streaming</strong> catalog &mdash; what actually arrived on a streaming service, newest first, with a show pushed back to the top the day a new episode airs. It is a real catalog row right now and can be installed into Stremio or Nuvio from the URLs below; it is in the My Lists Addon Charts section of Quick Add and in Discover.</p>
     <p class="u-c-v_muted u-m-0_0_16px u-fs-v_font_size_sm">Powered by RapidAPI's <strong>Streaming Availability API</strong> (/changes) to capture the exact date titles and new episodes are added to streaming services (not release dates), with new arrivals first and recent episodes bumping shows to the top within a rolling 30-day window.</p>
@@ -14491,7 +14491,7 @@ ${UTILITY_CSS}
       newonstreaming: 'content',
       channelpresets: 'content',
       supportgoal: 'site',
-      sitenotice: 'site',
+      sitenotice: 'site', defaultmanifest: 'site',
       maintenance: 'site',
     };
 
@@ -14544,7 +14544,7 @@ ${UTILITY_CSS}
       if (tabId === 'newonstreaming' && !window._newOnStreamingLoadedOnce) { window._newOnStreamingLoadedOnce = true; loadNewOnStreaming(); }
       if (tabId === 'channelpresets' && !window._channelPresetsLoadedOnce) { window._channelPresetsLoadedOnce = true; loadChannelPresets(); }
       if (tabId === 'supportgoal' && !window._supportGoalLoadedOnce) { window._supportGoalLoadedOnce = true; loadSupportGoal(); }
-      if (tabId === 'sitenotice' && !window._siteNoticeLoadedOnce) { window._siteNoticeLoadedOnce = true; loadSiteNotice(); }
+      if (tabId === 'sitenotice' && !window._siteNoticeLoadedOnce) { window._siteNoticeLoadedOnce = true; loadSiteNotice(); } if (tabId === 'defaultmanifest' && !window._defaultManifestLoadedOnce) { window._defaultManifestLoadedOnce = true; loadDefaultManifest(); }
     }
 
     async function loadSupportGoal() {
@@ -14666,7 +14666,7 @@ ${UTILITY_CSS}
         say('Could not restore.', '#ff453a');
       }
     }
-
+${defaultManifestAdminScript()}
     function restoreAdminActiveTab() {
       let targetTab = '';
       const hashTab = (window.location.hash || '').replace(/^#/, '').trim();
@@ -18642,6 +18642,75 @@ async function searchTraktLists(query, traktKeyOverride) {
   }
 
   return lists;
+}
+// The /admin screen for the lists on the bare /manifest.json (see
+// 67_default-manifest-lists.js for the route behind it). Numbered 04 because the
+// dashboard calls it while rendering, and render_check only sees files up to the
+// worker's export default (26). Kept in its own file
+// because 03_admin.js is over the size limit and may not grow; it is dropped into
+// the dashboard from there. One list per line: type | name | source link.
+
+function defaultManifestAdminPanel() {
+  return `
+  <div class="admin-tab-panel" data-admin-panel="defaultmanifest">
+    <p class="u-c-v_muted u-mt-0 u-fs-v_font_size_base">The <strong>default addon link</strong>: the lists people get from <code>/manifest.json</code> when they add the addon without making their own install link. Apps pick up a change the next time they refresh the addon.</p>
+    <div class="panel u-m-0_0_18px u-p-14px_16px u-maxw-520px">
+      <label class="u-fs-v_font_size_sm u-c-v_muted u-mb-6px" style="display:block;">Lists, one per line
+        <textarea id="defaultManifestLists" class="admin-select u-m-4px_0_0" rows="12" style="display:block; width:100%;" placeholder="movie | Popular Movies | tmdb:chart:popular"></textarea>
+      </label>
+      <div class="u-fs-v_font_size_xs u-c-v_muted u-mb-14px">Write each line as <strong>movie</strong> or <strong>series</strong>, then the name, then the source link, with a | between them. They show in this order. Delete a line to remove a list.</div>
+      <div class="u-gap-10px u-ai-center u-fw2-wrap" style="display:flex;">
+        <button type="button" class="primary lc-btn" data-act="saveDefaultManifest">Save</button>
+        <a class="secondary lc-btn" href="/manifest.json" target="_blank" rel="noopener">Open the link</a>
+        <span id="defaultManifestStatus" class="u-fs-v_font_size_sm" style="color:var(--muted);"></span>
+      </div>
+    </div>
+  </div>
+`;
+}
+
+// The page script's two functions. Plain strings inside: no template
+// placeholders, no closing script tag.
+function defaultManifestAdminScript() {
+  return `
+    async function loadDefaultManifest() {
+      const status = document.getElementById('defaultManifestStatus');
+      try {
+        const res = await fetch('/admin/api/default-manifest', { cache: 'no-store' });
+        const data = await res.json();
+        if (!data || !data.ok) { if (status) status.textContent = (data && data.error) || 'Could not load.'; return; }
+        document.getElementById('defaultManifestLists').value = (data.lists || []).map(function (l) { return l.type + ' | ' + l.name + ' | ' + l.url; }).join('\\n');
+      } catch (e) {
+        if (status) status.textContent = 'Could not load.';
+      }
+    }
+
+    async function saveDefaultManifest() {
+      const status = document.getElementById('defaultManifestStatus');
+      const say = (text, color) => { if (status) { status.textContent = text; status.style.color = color || '#8E8E93'; } };
+      const lists = [];
+      const lines = document.getElementById('defaultManifestLists').value.split('\\n');
+      for (let i = 0; i < lines.length; i++) {
+        if (!lines[i].trim()) continue;
+        const parts = lines[i].split('|');
+        if (parts.length < 3) { say('Line ' + (i + 1) + ' needs three parts: type | name | source link.', '#ff453a'); return; }
+        lists.push({ type: parts[0].trim().toLowerCase(), name: parts[1].trim(), url: parts.slice(2).join('|').trim() });
+      }
+      say('Saving...');
+      try {
+        const res = await fetch('/admin/api/default-manifest', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ lists: lists }),
+        });
+        const data = await res.json();
+        if (!data || !data.ok) { say((data && data.error) || 'Could not save.', '#ff453a'); return; }
+        say('Saved. Apps show it the next time they refresh the addon.', '#30d158');
+      } catch (e) {
+        say('Could not save.', '#ff453a');
+      }
+    }
+`;
 }
 // Stat counters: bumpStat / bumpStatBy and their in-isolate batching (PERF-04).
 // Moved out of 03_admin.js, which is over its size baseline and may only shrink;
@@ -115879,6 +115948,7 @@ async function handleAdminApiFeedbackAndToolsRoutes(request, env, ctx, url, path
   if (path === "/admin/api/apiusage" && request.method === "GET") return adminApiApiusage(request, env);
   if (path === "/admin/api/support-goal" && (request.method === "GET" || request.method === "POST")) return adminApiSupportGoal(request, env, url);
   if (path === "/admin/api/site-notice" && (request.method === "GET" || request.method === "POST")) return adminApiSiteNotice(request, env);
+  if (path === "/admin/api/default-manifest" && (request.method === "GET" || request.method === "POST")) return adminApiDefaultManifest(request, env);
   if (path === "/admin/api/new-on-streaming" && request.method === "GET") return adminApiNewOnStreaming(request, env);
   if (path === "/admin/api/new-on-streaming/sweep" && request.method === "POST") return adminApiNewOnStreamingSweep(request, env, ctx);
   if (path === "/admin/api/new-on-streaming/preview" && request.method === "GET") return adminApiNewOnStreamingPreview(request, env, ctx, url);
@@ -118169,6 +118239,76 @@ async function creatorListSaveSearchIndex(env, auth, slug, name, visibility) {
     }
   }
 }
+// The lists the bare /manifest.json (the addon link with no install config) shows.
+//
+// The admin curates them in /admin. They are kept as one KV record, an array of
+// the same rows an install config holds ({ id, name, type, url, enabled }), so
+// buildManifest advertises them unchanged and stremioCatalogRow reads them with
+// no config the way it reads a chart row (findDefaultManifestEntry).
+const DEFAULT_MANIFEST_KEY = "default:manifest:lists:v1";
+const DEFAULT_MANIFEST_MAX_LISTS = 50;
+const DEFAULT_MANIFEST_NAME_MAX = 80;
+const DEFAULT_MANIFEST_URL_MAX = 2000;
+
+async function readDefaultManifestLists(env) {
+  try {
+    const raw = env && env.CONFIGS ? await env.CONFIGS.get(DEFAULT_MANIFEST_KEY) : null;
+    const parsed = raw ? JSON.parse(raw) : null;
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter((e) => e && typeof e === "object" && e.id && e.type && e.url);
+  } catch {
+    return [];
+  }
+}
+
+// The row a config-less catalog request names, or null.
+async function findDefaultManifestEntry(env, id, type) {
+  const lists = await readDefaultManifestLists(env);
+  return lists.find((e) => e.id === id && e.type === type && e.enabled !== false) || null;
+}
+
+// What the admin sent, as rows ready to store: { value } or { error }. The id is
+// made here (home-<type>-<name>, numbered when two rows would share one) because
+// it is a catalog id in a URL path and has to be the same each time it is built.
+function cleanDefaultManifestLists(input) {
+  if (!Array.isArray(input)) return { error: "Send the lists as a list." };
+  if (input.length > DEFAULT_MANIFEST_MAX_LISTS) return { error: "At most " + DEFAULT_MANIFEST_MAX_LISTS + " lists." };
+  const taken = new Set();
+  const value = [];
+  for (let i = 0; i < input.length; i++) {
+    const row = input[i];
+    const where = "List " + (i + 1) + ": ";
+    if (!row || typeof row !== "object" || Array.isArray(row)) return { error: where + "not a list row." };
+    const name = typeof row.name === "string" ? row.name.trim() : "";
+    const url = typeof row.url === "string" ? row.url.trim() : "";
+    if (!name || name.length > DEFAULT_MANIFEST_NAME_MAX) return { error: where + "give it a name of up to " + DEFAULT_MANIFEST_NAME_MAX + " characters." };
+    if (row.type !== "movie" && row.type !== "series") return { error: where + 'the type has to be "movie" or "series".' };
+    if (!url || url.length > DEFAULT_MANIFEST_URL_MAX) return { error: where + "give it a source link." };
+    const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 40) || "list";
+    const base = "home-" + row.type + "-" + slug;
+    let id = base;
+    for (let n = 2; taken.has(id); n++) id = base + "-" + n;
+    taken.add(id);
+    value.push({ id, name, type: row.type, url, enabled: row.enabled !== false });
+  }
+  return { value };
+}
+
+// /admin/api/default-manifest -> the lists the bare manifest shows (GET), and
+// the save (POST { lists: [{ name, type, url, enabled? }] }), which replaces them.
+async function adminApiDefaultManifest(request, env) {
+  const authed = await isAdminRequest(request, env);
+  if (!authed) return json({ ok: false, error: "Not authorized." }, 401);
+  if (!env || !env.CONFIGS) return json({ ok: false, error: "No CONFIGS namespace is bound." });
+  if (request.method === "POST") {
+    let body = {};
+    try { body = await readJsonObject(request); } catch { return json({ ok: false, error: "Invalid JSON body." }, 400); }
+    const next = cleanDefaultManifestLists(body && body.lists);
+    if (next.error) return json({ ok: false, error: next.error }, 400, { "Cache-Control": "no-store" });
+    await env.CONFIGS.put(DEFAULT_MANIFEST_KEY, JSON.stringify(next.value));
+  }
+  return json({ ok: true, lists: await readDefaultManifestLists(env) }, 200, { "Cache-Control": "no-store" });
+}
 // Deleting an account deletes the support/feedback threads filed under its
 // username (audit SEC-04, owner decision 2026-11-10): the D1 row and the KV
 // copy. A reset keeps them (detachFeedbackThreadsFromCreator, 03_admin.js, is
@@ -120339,7 +120479,7 @@ function handleStremioManifestRoutes(request, env, ctx, url, path) {
   let m = path.match(/^\/([^/]+)(?:\/tv)?\/manifest\.json$/);
   if (!m && path.indexOf("/c/") === 0) m = path.slice(2).match(/^\/([^/]+)(?:\/tv)?\/manifest\.json$/);
   if (m) return installManifest(request, env, ctx, url, m, path);
-  if (path === "/manifest.json" || path.indexOf("/c/manifest.json") === 0) return bareManifest(request, url);
+  if (path === "/manifest.json" || path.indexOf("/c/manifest.json") === 0) return bareManifest(request, url, env);
   m = path.match(/^\/([^/]+)\/subtitles\/(movie|series)\/([^/]+?)(?:\/[^/]+)?\.json$/);
   if (!m && path.indexOf("/c/") === 0) m = path.slice(2).match(/^\/([^/]+)\/subtitles\/(movie|series)\/([^/]+?)(?:\/[^/]+)?\.json$/);
   if (m) return subtitlesPing(request, env, ctx, path, m);
@@ -120396,12 +120536,17 @@ async function installManifest(request, env, ctx, url, m, rawPath) {
   );
 }
 
-// bare manifest.json with no config
-async function bareManifest(request, url) {
-  if (isBrowserNavigation(request)) {
-    return Response.redirect(`${url.origin}/configure`, 302);
-  }
-  return jsonPublic(buildManifest([], url.origin));
+// bare manifest.json with no config: the lists the admin curated in /admin
+// (67_default-manifest-lists.js). A browser sees the JSON too, so the link can
+// be checked by opening it. Sent no-store when it holds lists, so a change in
+// /admin reaches the apps on their next refresh instead of after an hour.
+async function bareManifest(request, url, env) {
+  const lists = await readDefaultManifestLists(env);
+  return jsonPublic(
+    buildManifest(lists, url.origin),
+    200,
+    lists.length ? { "Cache-Control": "no-cache, no-store, must-revalidate, max-age=0" } : {}
+  );
 }
 
 // /:config/subtitles/:type/:id.json -- see buildManifest's comment
@@ -120484,6 +120629,8 @@ async function stremioCatalogRow(request, env, ctx, url, m) {
     if (typeof findChartOrCollectionEntry === "function") {
       unconfiguredEntry = findChartOrCollectionEntry(id, type);
     }
+    // A list the admin put on the bare manifest (67_default-manifest-lists.js).
+    if (!unconfiguredEntry) unconfiguredEntry = await findDefaultManifestEntry(env, id, type);
     if (!unconfiguredEntry && env && env.CONFIGS) {
       try {
         unconfiguredEntry = await env.CONFIGS.get(`col_cat:${id}:${type}`, "json");

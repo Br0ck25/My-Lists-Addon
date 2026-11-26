@@ -49,6 +49,7 @@
   "/admin/api/support-emails/threads": "admin",
   "/admin/api/support-goal": "admin",
   "/admin/api/site-notice": "admin",
+  "/admin/api/default-manifest": "admin",
   "/admin/login": "admin-login",
   "/admin/logout": "admin-login",
   "/api/bp/warm": "public",

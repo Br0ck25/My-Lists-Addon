@@ -88,7 +88,7 @@ function handleStremioManifestRoutes(request, env, ctx, url, path) {
   let m = path.match(/^\/([^/]+)(?:\/tv)?\/manifest\.json$/);
   if (!m && path.indexOf("/c/") === 0) m = path.slice(2).match(/^\/([^/]+)(?:\/tv)?\/manifest\.json$/);
   if (m) return installManifest(request, env, ctx, url, m, path);
-  if (path === "/manifest.json" || path.indexOf("/c/manifest.json") === 0) return bareManifest(request, url);
+  if (path === "/manifest.json" || path.indexOf("/c/manifest.json") === 0) return bareManifest(request, url, env);
   m = path.match(/^\/([^/]+)\/subtitles\/(movie|series)\/([^/]+?)(?:\/[^/]+)?\.json$/);
   if (!m && path.indexOf("/c/") === 0) m = path.slice(2).match(/^\/([^/]+)\/subtitles\/(movie|series)\/([^/]+?)(?:\/[^/]+)?\.json$/);
   if (m) return subtitlesPing(request, env, ctx, path, m);
@@ -145,12 +145,17 @@ async function installManifest(request, env, ctx, url, m, rawPath) {
   );
 }
 
-// bare manifest.json with no config
-async function bareManifest(request, url) {
-  if (isBrowserNavigation(request)) {
-    return Response.redirect(`${url.origin}/configure`, 302);
-  }
-  return jsonPublic(buildManifest([], url.origin));
+// bare manifest.json with no config: the lists the admin curated in /admin
+// (67_default-manifest-lists.js). A browser sees the JSON too, so the link can
+// be checked by opening it. Sent no-store when it holds lists, so a change in
+// /admin reaches the apps on their next refresh instead of after an hour.
+async function bareManifest(request, url, env) {
+  const lists = await readDefaultManifestLists(env);
+  return jsonPublic(
+    buildManifest(lists, url.origin),
+    200,
+    lists.length ? { "Cache-Control": "no-cache, no-store, must-revalidate, max-age=0" } : {}
+  );
 }
 
 // /:config/subtitles/:type/:id.json -- see buildManifest's comment
@@ -233,6 +238,8 @@ async function stremioCatalogRow(request, env, ctx, url, m) {
     if (typeof findChartOrCollectionEntry === "function") {
       unconfiguredEntry = findChartOrCollectionEntry(id, type);
     }
+    // A list the admin put on the bare manifest (67_default-manifest-lists.js).
+    if (!unconfiguredEntry) unconfiguredEntry = await findDefaultManifestEntry(env, id, type);
     if (!unconfiguredEntry && env && env.CONFIGS) {
       try {
         unconfiguredEntry = await env.CONFIGS.get(`col_cat:${id}:${type}`, "json");
