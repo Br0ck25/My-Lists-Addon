@@ -76,4 +76,15 @@ describe("default addon link picker", () => {
     const row = p.defaultManifestRowsFor(found("movie"))[0];
     assert.deepEqual(Object.keys(row).sort(), ["name", "type", "url"]);
   });
+
+  it("a Quick Add result uses its own movie link for Movies and its own show link for Series", () => {
+    const p = loadScript();
+    const chart = { name: "MDBList Popular", type: "mixed", group: "Charts", movieUrl: "https://mdblist.com/lists/official/movies/popular", showUrl: "https://mdblist.com/lists/official/shows/popular" };
+    assert.deepEqual(p.defaultManifestRowsFor(chart).map((r) => [r.type, r.url]), [
+      ["movie", "https://mdblist.com/lists/official/movies/popular"],
+      ["series", "https://mdblist.com/lists/official/shows/popular"],
+    ]);
+    const movieOnly = { name: "Trakt Box Office", type: "movie", movieUrl: "trakt:chart:box_office", showUrl: "" };
+    assert.deepEqual(p.defaultManifestRowsFor(movieOnly).map((r) => [r.type, r.url]), [["movie", "trakt:chart:box_office"]]);
+  });
 });

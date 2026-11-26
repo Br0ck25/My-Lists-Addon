@@ -4,22 +4,23 @@
 // worker's export default (26). Kept in its own file because 03_admin.js is over
 // the size limit and may not grow; it is dropped into the dashboard from there.
 //
-// A picker, not a form: the admin searches the site's published lists
-// (/api/search-published-lists) and clicks Add. Every click saves at once.
+// A picker, not a form: the admin searches what Quick Add and Discover offer
+// (/admin/api/default-manifest/catalog) and the lists people published
+// (/api/search-published-lists), and clicks Add. Every click saves at once.
 
 function defaultManifestAdminPanel() {
   return `
   <div class="admin-tab-panel" data-admin-panel="defaultmanifest">
-    <p class="u-c-v_muted u-mt-0 u-fs-v_font_size_base">The <strong>default addon link</strong>: the lists people get from <code>/manifest.json</code> when they add the addon without making their own install link. Search the lists published on the site and add the ones you want. Every change is saved straight away, and apps show it the next time they refresh the addon.</p>
+    <p class="u-c-v_muted u-mt-0 u-fs-v_font_size_base">The <strong>default addon link</strong>: the lists people get from <code>/manifest.json</code> when they add the addon without making their own install link. Search Quick Add, Discover and the lists published on the site, and add the ones you want. Every change is saved straight away, and apps show it the next time they refresh the addon.</p>
     <div class="panel u-m-0_0_18px u-p-14px_16px u-maxw-520px">
-      <label class="u-fs-v_font_size_sm u-c-v_muted u-mb-6px" style="display:block;">Search the site's lists
-        <input type="text" id="defaultManifestSearch" class="admin-select u-m-4px_0_0" maxlength="80" placeholder="Name or creator" data-act="searchDefaultManifest" data-act-on="keydown" data-act-keys="Enter" style="display:block; width:100%;">
+      <label class="u-fs-v_font_size_sm u-c-v_muted u-mb-6px" style="display:block;">Search lists
+        <input type="text" id="defaultManifestSearch" class="admin-select u-m-4px_0_0" maxlength="80" placeholder="For example horror, Netflix or a creator" data-act="searchDefaultManifest" data-act-on="keydown" data-act-keys="Enter" style="display:block; width:100%;">
       </label>
       <div class="u-gap-10px u-ai-center u-fw2-wrap u-mb-12px" style="display:flex;">
         <button type="button" class="primary lc-btn" data-act="searchDefaultManifest">Search</button>
         <span id="defaultManifestStatus" class="u-fs-v_font_size_sm" style="color:var(--muted);"></span>
       </div>
-      <div id="defaultManifestResults"></div>
+      <div id="defaultManifestResults" style="max-height:420px; overflow:auto;"></div>
     </div>
     <div class="panel u-m-0_0_18px u-p-14px_16px u-maxw-520px">
       <div class="u-fw-600 u-fs-v_font_size_base u-mb-8px">On the default link</div>
@@ -34,15 +35,23 @@ function defaultManifestAdminPanel() {
 // script tag. Names are built with textContent, never innerHTML, because a list's
 // name is written by whoever published it.
 function defaultManifestAdminScript() {
+  return defaultManifestAdminHelpersScript() + defaultManifestAdminNetworkScript();
+}
+
+// The first half of the page script: the rows a pick becomes, and drawing them.
+function defaultManifestAdminHelpersScript() {
   return `
     var defaultManifestState = [];
     var defaultManifestFound = [];
 
     // What one search result becomes on the link: a Movies row, a Series row,
-    // or both for a list that holds both.
+    // or both for a list that holds both. A Quick Add or Discover result has a
+    // link for each (movieUrl, showUrl, which can differ); a published list has one.
     function defaultManifestRowsFor(found) {
       const types = found.type === 'movie' ? ['movie'] : (found.type === 'series' ? ['series'] : ['movie', 'series']);
-      return types.map(function (t) { return { type: t, name: found.name, url: found.url }; });
+      return types.map(function (t) {
+        return { type: t, name: found.name, url: (t === 'movie' ? found.movieUrl : found.showUrl) || found.url };
+      });
     }
 
     // New rows go last; a row already there (same type, same link) is not added again.
@@ -107,7 +116,8 @@ function defaultManifestAdminScript() {
         defaultManifestFound.forEach(function (f) {
           const rows = defaultManifestRowsFor(f);
           const added = defaultManifestMerge(defaultManifestState, rows).length === defaultManifestState.length;
-          const detail = (f.creatorName ? 'by ' + f.creatorName + ' · ' : '') + (f.items || 0) + ' titles · ' + (f.type === 'movie' ? 'Movies' : (f.type === 'series' ? 'Series' : 'Movies and series'));
+          const kind = f.type === 'movie' ? 'Movies' : (f.type === 'series' ? 'Series' : 'Movies and series');
+          const detail = f.group ? f.group + ' · ' + kind : (f.creatorName ? 'by ' + f.creatorName + ' · ' : '') + (f.items || 0) + ' titles · ' + kind;
           results.appendChild(defaultManifestLine(f.name, detail, [
             defaultManifestButton(added ? 'Added' : 'Add', function () { defaultManifestSave(defaultManifestMerge(defaultManifestState, rows), '"' + f.name + '" added.'); }, added),
           ]));
@@ -128,6 +138,12 @@ function defaultManifestAdminScript() {
       defaultManifestSave(defaultManifestState.filter(function (r, k) { return k !== i; }), '"' + gone.name + '" removed.');
     }
 
+`;
+}
+
+// The second half of the page script: saving, loading and searching.
+function defaultManifestAdminNetworkScript() {
+  return `
     async function defaultManifestSave(next, doneText) {
       defaultManifestSay('Saving…');
       try {
@@ -158,20 +174,30 @@ function defaultManifestAdminScript() {
       }
     }
 
+    // One search, two places. Either one failing leaves the other's results.
+    async function defaultManifestFetchLists(url) {
+      try {
+        const res = await fetch(url, { cache: 'no-store' });
+        const data = await res.json();
+        return data && data.ok && Array.isArray(data.lists) ? data.lists : null;
+      } catch (e) {
+        return null;
+      }
+    }
+
     async function searchDefaultManifest() {
       const q = (document.getElementById('defaultManifestSearch').value || '').trim();
       if (!q) { defaultManifestSay('Type a name to search.', '#ff453a'); return; }
       defaultManifestSay('Searching…');
-      try {
-        const res = await fetch('/api/search-published-lists?q=' + encodeURIComponent(q), { cache: 'no-store' });
-        const data = await res.json();
-        if (!data || !data.ok) { defaultManifestSay((data && data.error) || 'Could not search.', '#ff453a'); return; }
-        defaultManifestFound = (data.lists || []).filter(function (l) { return l && l.name && l.url; }).slice(0, 30);
-        renderDefaultManifest();
-        defaultManifestSay(defaultManifestFound.length ? '' : 'No lists found.');
-      } catch (e) {
-        defaultManifestSay('Could not search.', '#ff453a');
-      }
+      const both = await Promise.all([
+        defaultManifestFetchLists('/admin/api/default-manifest/catalog?q=' + encodeURIComponent(q)),
+        defaultManifestFetchLists('/api/search-published-lists?q=' + encodeURIComponent(q)),
+      ]);
+      if (both[0] === null && both[1] === null) { defaultManifestSay('Could not search.', '#ff453a'); return; }
+      const site = (both[1] || []).filter(function (l) { return l && l.name && l.url; }).slice(0, 30);
+      defaultManifestFound = (both[0] || []).concat(site);
+      renderDefaultManifest();
+      defaultManifestSay(defaultManifestFound.length ? '' : 'No lists found.');
     }
 `;
 }

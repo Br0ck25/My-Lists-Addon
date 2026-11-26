@@ -34,7 +34,7 @@ const WORKER_BUILD_DATE = "2026-11-26";
 // header.js plus the numbered files, so two pasted Workers carry the same
 // value only if they are the same code. /admin shows it beside the build date:
 // after pasting, compare it with what `python build.py` printed.
-const WORKER_BUILD = "43c5a9e657";
+const WORKER_BUILD = "fc22585323";
 
 // --- Trakt Continue Watching: how many shows get a "next episode" check -------
 //
@@ -18649,22 +18649,23 @@ async function searchTraktLists(query, traktKeyOverride) {
 // worker's export default (26). Kept in its own file because 03_admin.js is over
 // the size limit and may not grow; it is dropped into the dashboard from there.
 //
-// A picker, not a form: the admin searches the site's published lists
-// (/api/search-published-lists) and clicks Add. Every click saves at once.
+// A picker, not a form: the admin searches what Quick Add and Discover offer
+// (/admin/api/default-manifest/catalog) and the lists people published
+// (/api/search-published-lists), and clicks Add. Every click saves at once.
 
 function defaultManifestAdminPanel() {
   return `
   <div class="admin-tab-panel" data-admin-panel="defaultmanifest">
-    <p class="u-c-v_muted u-mt-0 u-fs-v_font_size_base">The <strong>default addon link</strong>: the lists people get from <code>/manifest.json</code> when they add the addon without making their own install link. Search the lists published on the site and add the ones you want. Every change is saved straight away, and apps show it the next time they refresh the addon.</p>
+    <p class="u-c-v_muted u-mt-0 u-fs-v_font_size_base">The <strong>default addon link</strong>: the lists people get from <code>/manifest.json</code> when they add the addon without making their own install link. Search Quick Add, Discover and the lists published on the site, and add the ones you want. Every change is saved straight away, and apps show it the next time they refresh the addon.</p>
     <div class="panel u-m-0_0_18px u-p-14px_16px u-maxw-520px">
-      <label class="u-fs-v_font_size_sm u-c-v_muted u-mb-6px" style="display:block;">Search the site's lists
-        <input type="text" id="defaultManifestSearch" class="admin-select u-m-4px_0_0" maxlength="80" placeholder="Name or creator" data-act="searchDefaultManifest" data-act-on="keydown" data-act-keys="Enter" style="display:block; width:100%;">
+      <label class="u-fs-v_font_size_sm u-c-v_muted u-mb-6px" style="display:block;">Search lists
+        <input type="text" id="defaultManifestSearch" class="admin-select u-m-4px_0_0" maxlength="80" placeholder="For example horror, Netflix or a creator" data-act="searchDefaultManifest" data-act-on="keydown" data-act-keys="Enter" style="display:block; width:100%;">
       </label>
       <div class="u-gap-10px u-ai-center u-fw2-wrap u-mb-12px" style="display:flex;">
         <button type="button" class="primary lc-btn" data-act="searchDefaultManifest">Search</button>
         <span id="defaultManifestStatus" class="u-fs-v_font_size_sm" style="color:var(--muted);"></span>
       </div>
-      <div id="defaultManifestResults"></div>
+      <div id="defaultManifestResults" style="max-height:420px; overflow:auto;"></div>
     </div>
     <div class="panel u-m-0_0_18px u-p-14px_16px u-maxw-520px">
       <div class="u-fw-600 u-fs-v_font_size_base u-mb-8px">On the default link</div>
@@ -18679,15 +18680,23 @@ function defaultManifestAdminPanel() {
 // script tag. Names are built with textContent, never innerHTML, because a list's
 // name is written by whoever published it.
 function defaultManifestAdminScript() {
+  return defaultManifestAdminHelpersScript() + defaultManifestAdminNetworkScript();
+}
+
+// The first half of the page script: the rows a pick becomes, and drawing them.
+function defaultManifestAdminHelpersScript() {
   return `
     var defaultManifestState = [];
     var defaultManifestFound = [];
 
     // What one search result becomes on the link: a Movies row, a Series row,
-    // or both for a list that holds both.
+    // or both for a list that holds both. A Quick Add or Discover result has a
+    // link for each (movieUrl, showUrl, which can differ); a published list has one.
     function defaultManifestRowsFor(found) {
       const types = found.type === 'movie' ? ['movie'] : (found.type === 'series' ? ['series'] : ['movie', 'series']);
-      return types.map(function (t) { return { type: t, name: found.name, url: found.url }; });
+      return types.map(function (t) {
+        return { type: t, name: found.name, url: (t === 'movie' ? found.movieUrl : found.showUrl) || found.url };
+      });
     }
 
     // New rows go last; a row already there (same type, same link) is not added again.
@@ -18752,7 +18761,8 @@ function defaultManifestAdminScript() {
         defaultManifestFound.forEach(function (f) {
           const rows = defaultManifestRowsFor(f);
           const added = defaultManifestMerge(defaultManifestState, rows).length === defaultManifestState.length;
-          const detail = (f.creatorName ? 'by ' + f.creatorName + ' · ' : '') + (f.items || 0) + ' titles · ' + (f.type === 'movie' ? 'Movies' : (f.type === 'series' ? 'Series' : 'Movies and series'));
+          const kind = f.type === 'movie' ? 'Movies' : (f.type === 'series' ? 'Series' : 'Movies and series');
+          const detail = f.group ? f.group + ' · ' + kind : (f.creatorName ? 'by ' + f.creatorName + ' · ' : '') + (f.items || 0) + ' titles · ' + kind;
           results.appendChild(defaultManifestLine(f.name, detail, [
             defaultManifestButton(added ? 'Added' : 'Add', function () { defaultManifestSave(defaultManifestMerge(defaultManifestState, rows), '"' + f.name + '" added.'); }, added),
           ]));
@@ -18773,6 +18783,12 @@ function defaultManifestAdminScript() {
       defaultManifestSave(defaultManifestState.filter(function (r, k) { return k !== i; }), '"' + gone.name + '" removed.');
     }
 
+`;
+}
+
+// The second half of the page script: saving, loading and searching.
+function defaultManifestAdminNetworkScript() {
+  return `
     async function defaultManifestSave(next, doneText) {
       defaultManifestSay('Saving…');
       try {
@@ -18803,20 +18819,30 @@ function defaultManifestAdminScript() {
       }
     }
 
+    // One search, two places. Either one failing leaves the other's results.
+    async function defaultManifestFetchLists(url) {
+      try {
+        const res = await fetch(url, { cache: 'no-store' });
+        const data = await res.json();
+        return data && data.ok && Array.isArray(data.lists) ? data.lists : null;
+      } catch (e) {
+        return null;
+      }
+    }
+
     async function searchDefaultManifest() {
       const q = (document.getElementById('defaultManifestSearch').value || '').trim();
       if (!q) { defaultManifestSay('Type a name to search.', '#ff453a'); return; }
       defaultManifestSay('Searching…');
-      try {
-        const res = await fetch('/api/search-published-lists?q=' + encodeURIComponent(q), { cache: 'no-store' });
-        const data = await res.json();
-        if (!data || !data.ok) { defaultManifestSay((data && data.error) || 'Could not search.', '#ff453a'); return; }
-        defaultManifestFound = (data.lists || []).filter(function (l) { return l && l.name && l.url; }).slice(0, 30);
-        renderDefaultManifest();
-        defaultManifestSay(defaultManifestFound.length ? '' : 'No lists found.');
-      } catch (e) {
-        defaultManifestSay('Could not search.', '#ff453a');
-      }
+      const both = await Promise.all([
+        defaultManifestFetchLists('/admin/api/default-manifest/catalog?q=' + encodeURIComponent(q)),
+        defaultManifestFetchLists('/api/search-published-lists?q=' + encodeURIComponent(q)),
+      ]);
+      if (both[0] === null && both[1] === null) { defaultManifestSay('Could not search.', '#ff453a'); return; }
+      const site = (both[1] || []).filter(function (l) { return l && l.name && l.url; }).slice(0, 30);
+      defaultManifestFound = (both[0] || []).concat(site);
+      renderDefaultManifest();
+      defaultManifestSay(defaultManifestFound.length ? '' : 'No lists found.');
     }
 `;
 }
@@ -116057,6 +116083,7 @@ async function handleAdminApiFeedbackAndToolsRoutes(request, env, ctx, url, path
   if (path === "/admin/api/support-goal" && (request.method === "GET" || request.method === "POST")) return adminApiSupportGoal(request, env, url);
   if (path === "/admin/api/site-notice" && (request.method === "GET" || request.method === "POST")) return adminApiSiteNotice(request, env);
   if (path === "/admin/api/default-manifest" && (request.method === "GET" || request.method === "POST")) return adminApiDefaultManifest(request, env);
+  if (path === "/admin/api/default-manifest/catalog" && request.method === "GET") return adminApiDefaultManifestCatalog(request, env, url);
   if (path === "/admin/api/new-on-streaming" && request.method === "GET") return adminApiNewOnStreaming(request, env);
   if (path === "/admin/api/new-on-streaming/sweep" && request.method === "POST") return adminApiNewOnStreamingSweep(request, env, ctx);
   if (path === "/admin/api/new-on-streaming/preview" && request.method === "GET") return adminApiNewOnStreamingPreview(request, env, ctx, url);
@@ -118416,6 +118443,53 @@ async function adminApiDefaultManifest(request, env) {
     await env.CONFIGS.put(DEFAULT_MANIFEST_KEY, JSON.stringify(next.value));
   }
   return json({ ok: true, lists: await readDefaultManifestLists(env) }, 200, { "Cache-Control": "no-store" });
+}
+
+// What Quick Add and Discover offer, as one flat list the admin can search:
+// { group, name, type, movieUrl, showUrl }. `type` is "mixed" when it has both a
+// movie and a series source, otherwise "movie" or "series". A source link is the
+// same string a row's `url` holds, so a pick is saved as it is. Several sources
+// merged into one shelf are newline-separated, as fetchMergedCatalog reads them.
+function adminQuickAddCatalog() {
+  const out = [];
+  const add = (group, name, movieUrl, showUrl) => {
+    if (!name || (!movieUrl && !showUrl)) return;
+    const type = movieUrl && showUrl ? "mixed" : (movieUrl ? "movie" : "series");
+    out.push({ group, name, type, movieUrl: movieUrl || "", showUrl: showUrl || "" });
+  };
+  const pairs = (group, list) => {
+    for (const e of list || []) {
+      add(group, e.name, e.movieUrl || (e.type === "movie" ? e.url : ""), e.showUrl || (e.type === "series" ? e.url : ""));
+    }
+  };
+  pairs("Charts", [...MDBLIST_OFFICIAL_CHARTS, ...TMDB_CHART_LISTS, ...TRAKT_CHART_LISTS, ...TRAKT_BOXOFFICE_LIST, ...SIMKL_CHART_LISTS, ...SIMKL_ANIME_LIST, ...MY_LISTS_ADDON_CHARTS, ...HIDDEN_GEMS_LIST]);
+  for (const c of COMBINED_CHART_LISTS) add("Charts", c.name + " (combined)", (c.movieUrls || []).join("\n"), (c.showUrls || []).join("\n"));
+  pairs("Streaming services", STREAMING_ALL);
+  for (const r of STREAMING_ROW_CATALOGS) {
+    const link = `tmdb:chart:${r.chartKey}`;
+    add("Streaming services", `${r.serviceName}: ${r.name}`, r.kinds.movie ? link : "", r.kinds.series ? link : "");
+  }
+  pairs("Kids", KIDS_LISTS);
+  pairs("Holidays", HOLIDAY_LISTS);
+  pairs("Genres", GENRE_LISTS);
+  for (const c of CURATED_LIST_ENTRIES) add("Curated", c.name, c.type === "series" ? "" : `curated:${c.slug}`, c.type === "series" ? `curated:${c.slug}` : "");
+  return out;
+}
+
+// The entries whose group and name hold every word typed, at most 60.
+function searchAdminQuickAddCatalog(q) {
+  const words = String(q || "").toLowerCase().split(/\s+/).filter(Boolean);
+  if (!words.length) return [];
+  return adminQuickAddCatalog()
+    .filter((e) => { const hay = `${e.group} ${e.name}`.toLowerCase(); return words.every((w) => hay.includes(w)); })
+    .slice(0, 60);
+}
+
+// /admin/api/default-manifest/catalog?q=  (GET) -> { ok, lists }
+async function adminApiDefaultManifestCatalog(request, env, url) {
+  const authed = await isAdminRequest(request, env);
+  if (!authed) return json({ ok: false, error: "Not authorized." }, 401);
+  return json({ ok: true, lists: searchAdminQuickAddCatalog(url.searchParams.get("q")) }, 200, { "Cache-Control": "no-store" });
 }
 // Deleting an account deletes the support/feedback threads filed under its
 // username (audit SEC-04, owner decision 2026-11-10): the D1 row and the KV

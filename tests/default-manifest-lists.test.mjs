@@ -95,3 +95,75 @@ describe("default manifest lists", () => {
     assert.equal(new Set(ids).size, 2);
   });
 });
+
+// The picker also searches what Quick Add and Discover offer: charts, genres,
+// kids and holiday shelves, streaming services and their rows.
+describe("default manifest: searching Quick Add and Discover", () => {
+  const search = (env, cookie, q) => call(env, "/admin/api/default-manifest/catalog?q=" + encodeURIComponent(q), { cookie });
+
+  it("only an admin can search it", async () => {
+    const r = await call(newEnv(), "/admin/api/default-manifest/catalog?q=horror");
+    assert.equal(r.status, 401);
+  });
+
+  it("finds a genre shelf and says it holds both movies and series", async () => {
+    const env = newEnv();
+    const cookie = await adminCookie(env);
+    const r = await search(env, cookie, "horror");
+    assert.equal(r.status, 200, r.text);
+    const hit = r.body.lists.find((l) => l.movieUrl === "tmdb:genre:horror");
+    assert.ok(hit, "the Horror genre shelf is found");
+    assert.equal(hit.type, "mixed");
+    assert.equal(hit.showUrl, "tmdb:genre:horror");
+    assert.ok(hit.group, "it says where it came from");
+  });
+
+  it("keeps a chart's different movie and series sources apart", async () => {
+    const env = newEnv();
+    const cookie = await adminCookie(env);
+    const r = await search(env, cookie, "mdblist popular");
+    const hit = r.body.lists.find((l) => /mdblist\.com\/lists\/official\/movies\/popular/.test(l.movieUrl));
+    assert.ok(hit);
+    assert.match(hit.showUrl, /mdblist\.com\/lists\/official\/shows\/popular/);
+  });
+
+  it("finds a streaming service's own rows, and a movie-only chart is typed movie", async () => {
+    const env = newEnv();
+    const cookie = await adminCookie(env);
+    const rows = (await search(env, cookie, "netflix")).body.lists;
+    assert.ok(rows.length > 3, "Netflix has its service and its rows");
+    assert.ok(rows.every((l) => /netflix/i.test(l.name + " " + l.group)));
+    const box = (await search(env, cookie, "box office")).body.lists.find((l) => l.movieUrl === "trakt:chart:box_office");
+    assert.ok(box);
+    assert.equal(box.type, "movie");
+    assert.equal(box.showUrl, "");
+  });
+
+  it("every word has to match, an empty search finds nothing, and results are capped", async () => {
+    const env = newEnv();
+    const cookie = await adminCookie(env);
+    assert.deepEqual((await search(env, cookie, "")).body.lists, []);
+    assert.deepEqual((await search(env, cookie, "horror zzzzqqq")).body.lists, []);
+    assert.ok((await search(env, cookie, "e")).body.lists.length <= 60);
+  });
+
+  it("a found shelf, saved, loads on the bare manifest with no install link", async () => {
+    const env = newEnv();
+    const cookie = await adminCookie(env);
+    const hit = (await search(env, cookie, "horror")).body.lists.find((l) => l.movieUrl === "tmdb:genre:horror");
+    await call(env, "/admin/api/default-manifest", { method: "POST", cookie, json: { lists: [{ type: "movie", name: hit.name, url: hit.movieUrl }] } });
+    const asked = [];
+    globalThis.fetch = async (u) => {
+      asked.push(String(typeof u === "string" ? u : u.url));
+      return new Response(JSON.stringify({ results: [{ id: 603, title: "Alien", release_date: "1979-05-25", poster_path: "/p.jpg" }], total_pages: 1 }), { status: 200, headers: { "content-type": "application/json" } });
+    };
+    try {
+      const id = curated((await call(env, "/manifest.json")).body)[0].id;
+      const row = await call(env, `/catalog/movie/${id}.json`);
+      assert.equal(row.status, 200, row.text);
+      assert.ok(asked.some((u) => /themoviedb\.org\/3\/discover\/movie/.test(u)), "the genre's own source was read: " + asked.join(" "));
+    } finally {
+      globalThis.fetch = realFetch;
+    }
+  });
+});

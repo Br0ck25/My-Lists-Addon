@@ -68,3 +68,50 @@ async function adminApiDefaultManifest(request, env) {
   }
   return json({ ok: true, lists: await readDefaultManifestLists(env) }, 200, { "Cache-Control": "no-store" });
 }
+
+// What Quick Add and Discover offer, as one flat list the admin can search:
+// { group, name, type, movieUrl, showUrl }. `type` is "mixed" when it has both a
+// movie and a series source, otherwise "movie" or "series". A source link is the
+// same string a row's `url` holds, so a pick is saved as it is. Several sources
+// merged into one shelf are newline-separated, as fetchMergedCatalog reads them.
+function adminQuickAddCatalog() {
+  const out = [];
+  const add = (group, name, movieUrl, showUrl) => {
+    if (!name || (!movieUrl && !showUrl)) return;
+    const type = movieUrl && showUrl ? "mixed" : (movieUrl ? "movie" : "series");
+    out.push({ group, name, type, movieUrl: movieUrl || "", showUrl: showUrl || "" });
+  };
+  const pairs = (group, list) => {
+    for (const e of list || []) {
+      add(group, e.name, e.movieUrl || (e.type === "movie" ? e.url : ""), e.showUrl || (e.type === "series" ? e.url : ""));
+    }
+  };
+  pairs("Charts", [...MDBLIST_OFFICIAL_CHARTS, ...TMDB_CHART_LISTS, ...TRAKT_CHART_LISTS, ...TRAKT_BOXOFFICE_LIST, ...SIMKL_CHART_LISTS, ...SIMKL_ANIME_LIST, ...MY_LISTS_ADDON_CHARTS, ...HIDDEN_GEMS_LIST]);
+  for (const c of COMBINED_CHART_LISTS) add("Charts", c.name + " (combined)", (c.movieUrls || []).join("\n"), (c.showUrls || []).join("\n"));
+  pairs("Streaming services", STREAMING_ALL);
+  for (const r of STREAMING_ROW_CATALOGS) {
+    const link = `tmdb:chart:${r.chartKey}`;
+    add("Streaming services", `${r.serviceName}: ${r.name}`, r.kinds.movie ? link : "", r.kinds.series ? link : "");
+  }
+  pairs("Kids", KIDS_LISTS);
+  pairs("Holidays", HOLIDAY_LISTS);
+  pairs("Genres", GENRE_LISTS);
+  for (const c of CURATED_LIST_ENTRIES) add("Curated", c.name, c.type === "series" ? "" : `curated:${c.slug}`, c.type === "series" ? `curated:${c.slug}` : "");
+  return out;
+}
+
+// The entries whose group and name hold every word typed, at most 60.
+function searchAdminQuickAddCatalog(q) {
+  const words = String(q || "").toLowerCase().split(/\s+/).filter(Boolean);
+  if (!words.length) return [];
+  return adminQuickAddCatalog()
+    .filter((e) => { const hay = `${e.group} ${e.name}`.toLowerCase(); return words.every((w) => hay.includes(w)); })
+    .slice(0, 60);
+}
+
+// /admin/api/default-manifest/catalog?q=  (GET) -> { ok, lists }
+async function adminApiDefaultManifestCatalog(request, env, url) {
+  const authed = await isAdminRequest(request, env);
+  if (!authed) return json({ ok: false, error: "Not authorized." }, 401);
+  return json({ ok: true, lists: searchAdminQuickAddCatalog(url.searchParams.get("q")) }, 200, { "Cache-Control": "no-store" });
+}
