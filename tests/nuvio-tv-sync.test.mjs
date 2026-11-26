@@ -1164,6 +1164,24 @@ describe("My Lists TV library", () => {
     const after = (await lib(env, { targetId: tv, action: "get" })).body.items;
     assert.equal(after.length, 1); assert.equal(after[0].year, "2008");
   });
+  it("a website title filed under a TMDB id reaches the TV by its IMDb id, and a TV save keeps what the TV cannot show", async () => {
+    const env = makeEnv({ DB: makeD1(), CONFIGS: makeKv() });
+    const tv = await pairTv(env, "tvlib4", await accountProof(env, "tvlib4"));
+    await env.CONFIGS.put("creatorlist:tvlib4:watchlist", JSON.stringify({ updatedAt: 5, items: [
+      { id: "tmdb:693134", imdbId: "tt15239678", type: "movie", name: "Dune: Part Two", year: "2024" },
+      { id: "tt0137523", type: "movie", name: "Fight Club" },
+      { id: "tmdb:555", type: "movie", name: "No IMDb id yet" },
+    ] }));
+    const got = (await lib(env, { targetId: tv, action: "get" })).body.items;
+    assert.deepEqual(got.map((i) => i.id), ["tt15239678", "tt0137523"], "the title with no IMDb id at all is not sent");
+    // The TV sends its list back (as it does after any change): the website's copy of Dune is matched, not duplicated or lost.
+    const set = await lib(env, { targetId: tv, action: "set", items: [{ id: "tt15239678", type: "movie", name: "Dune: Part Two" }] });
+    assert.equal(set.status, 200);
+    const stored = JSON.parse(await env.CONFIGS.get("creatorlist:tvlib4:watchlist")).items;
+    assert.equal(stored.filter((i) => i.imdbId === "tt15239678" || i.id === "tt15239678").length, 1);
+    assert.equal(stored.find((i) => i.imdbId === "tt15239678").year, "2024", "the website's own fields survive");
+    assert.ok(stored.some((i) => i.id === "tmdb:555"), "a title the TV never saw is not deleted by the TV's save");
+  });
   it("refuses a username and bad requests", async () => {
     const env = makeEnv({ DB: makeD1(), CONFIGS: makeKv() });
     await accountProof(env, "tvlib2");

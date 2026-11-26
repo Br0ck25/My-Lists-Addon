@@ -45,7 +45,7 @@ def check_no_unlisted_sources():
     Only src/header.js and src/<folder>/NN_name.js (two digits) are assembled.
     Anything else (100_x.js, x.js, src/core/nested/20_x.js) used to be dropped
     silently, with every check still green (audit OPS-01)."""
-    picked = set(glob.glob('src/*/[0-9][0-9]_*.js')) | {'src/header.js'}
+    picked = {p.replace(os.sep, '/') for p in glob.glob('src/*/[0-9][0-9]_*.js')} | {'src/header.js'}
     left_out = []
     for root, _dirs, names in os.walk('src'):
         for n in names:

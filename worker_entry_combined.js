@@ -27,14 +27,14 @@
 // pasted file is live (docs/RELEASES.md). build.py fills in both; nobody
 // raises a number by hand. The date is the day the code last changed (see
 // build_date in build.py).
-const WORKER_BUILD_DATE = "2026-11-24";
+const WORKER_BUILD_DATE = "2026-11-26";
 
 // A fingerprint of the exact sources this file was built from. build.py fills
 // in the placeholder below with the first 10 characters of the SHA-256 of
 // header.js plus the numbered files, so two pasted Workers carry the same
 // value only if they are the same code. /admin shows it beside the build date:
 // after pasting, compare it with what `python build.py` printed.
-const WORKER_BUILD = "b12a918d47";
+const WORKER_BUILD = "666ee9bf47";
 
 // --- Trakt Continue Watching: how many shows get a "next episode" check -------
 //
@@ -130339,10 +130339,17 @@ async function handleNuvioTvLibrary(request, env, ctx) {
 
   const current = await readAccountWatchlist(env, username, null);
   const existing = current && Array.isArray(current.items) ? current.items : [];
-  if (body.action === "get") return json({ ok: true, items: existing, username, updatedAt: current ? Number(current.updatedAt) || 0 : 0 }, 200, { ...corsHeaders(), "Cache-Control": "no-store" });
+  // The website files some titles under a TMDB id ("tmdb:693134") with the IMDb id beside it; the TV only knows IMDb ids.
+  const imdbOf = (it) => { const m = [it && it.imdbId, it && it.id].map((v) => String(v || "")).find((v) => /^tt\d+$/.test(v)); return m || ""; };
+  if (body.action === "get") {
+    const forTv = existing.map((it) => { const id = imdbOf(it); return id ? { ...it, id } : null; }).filter(Boolean);
+    return json({ ok: true, items: forTv, username, updatedAt: current ? Number(current.updatedAt) || 0 : 0 }, 200, { ...corsHeaders(), "Cache-Control": "no-store" });
+  }
   if (body.action !== "set" || !Array.isArray(body.items) || body.items.length > TV_LIBRARY_MAX) return json({ ok: false, error: "Send action get, or set with up to 500 items." }, 400, corsHeaders());
 
-  const byId = new Map(existing.filter((it) => it && (it.id || it.imdbId)).map((it) => [String(it.id || it.imdbId), it]));
+  const byId = new Map(existing.filter((it) => it && imdbOf(it)).map((it) => [imdbOf(it), it]));
+  // Titles on the Watchlist the TV cannot show (no IMDb id) are kept, so a save from the TV does not delete them.
+  const unshown = existing.filter((it) => it && !imdbOf(it));
   const items = [];
   for (const it of body.items) {
     const id = String((it && it.id) || "").trim();
@@ -130350,7 +130357,7 @@ async function handleNuvioTvLibrary(request, env, ctx) {
     items.push(byId.get(id) || { id, type: it.type === "series" ? "series" : "movie", name: String(it.name || "").slice(0, 200), poster: String(it.poster || "").slice(0, 500) });
   }
   const updatedAt = Date.now();
-  const refused = await creatorTrackingWriteWatchlist(env, { username }, { watchlist: items }, updatedAt);
+  const refused = await creatorTrackingWriteWatchlist(env, { username }, { watchlist: [...items, ...unshown] }, updatedAt);
   if (refused) return refused;
   return json({ ok: true, updatedAt, count: items.length }, 200, corsHeaders());
 }

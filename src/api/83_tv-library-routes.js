@@ -19,10 +19,17 @@ async function handleNuvioTvLibrary(request, env, ctx) {
 
   const current = await readAccountWatchlist(env, username, null);
   const existing = current && Array.isArray(current.items) ? current.items : [];
-  if (body.action === "get") return json({ ok: true, items: existing, username, updatedAt: current ? Number(current.updatedAt) || 0 : 0 }, 200, { ...corsHeaders(), "Cache-Control": "no-store" });
+  // The website files some titles under a TMDB id ("tmdb:693134") with the IMDb id beside it; the TV only knows IMDb ids.
+  const imdbOf = (it) => { const m = [it && it.imdbId, it && it.id].map((v) => String(v || "")).find((v) => /^tt\d+$/.test(v)); return m || ""; };
+  if (body.action === "get") {
+    const forTv = existing.map((it) => { const id = imdbOf(it); return id ? { ...it, id } : null; }).filter(Boolean);
+    return json({ ok: true, items: forTv, username, updatedAt: current ? Number(current.updatedAt) || 0 : 0 }, 200, { ...corsHeaders(), "Cache-Control": "no-store" });
+  }
   if (body.action !== "set" || !Array.isArray(body.items) || body.items.length > TV_LIBRARY_MAX) return json({ ok: false, error: "Send action get, or set with up to 500 items." }, 400, corsHeaders());
 
-  const byId = new Map(existing.filter((it) => it && (it.id || it.imdbId)).map((it) => [String(it.id || it.imdbId), it]));
+  const byId = new Map(existing.filter((it) => it && imdbOf(it)).map((it) => [imdbOf(it), it]));
+  // Titles on the Watchlist the TV cannot show (no IMDb id) are kept, so a save from the TV does not delete them.
+  const unshown = existing.filter((it) => it && !imdbOf(it));
   const items = [];
   for (const it of body.items) {
     const id = String((it && it.id) || "").trim();
@@ -30,7 +37,7 @@ async function handleNuvioTvLibrary(request, env, ctx) {
     items.push(byId.get(id) || { id, type: it.type === "series" ? "series" : "movie", name: String(it.name || "").slice(0, 200), poster: String(it.poster || "").slice(0, 500) });
   }
   const updatedAt = Date.now();
-  const refused = await creatorTrackingWriteWatchlist(env, { username }, { watchlist: items }, updatedAt);
+  const refused = await creatorTrackingWriteWatchlist(env, { username }, { watchlist: [...items, ...unshown] }, updatedAt);
   if (refused) return refused;
   return json({ ok: true, updatedAt, count: items.length }, 200, corsHeaders());
 }

@@ -2832,3 +2832,9 @@ Owner decisions of 2026-11-10 on the open items of `docs/audit-2026-11-10/`. Rea
 
 ### Checked
 `tests/nuvio-tv-sync.test.mjs`: the read-back returns the stored position and the account name.
+
+## 2026-11-26 — My Lists TV: a title the website saved under a TMDB id now reaches the TV's Library (build `666ee9bf47`)
+- Found by testing a paired TV against the website. A title added to the Watchlist on the website can be stored as `tmdb:693134` with its IMDb id beside it (`imdbId`). `/api/nuvio-tv/library` handed that to the TV as it was, and the TV, which only knows IMDb ids, dropped it: the Watchlist showed the title and the TV's Library did not.
+- `get` now sends such a title under its IMDb id and leaves out titles with no IMDb id at all. `set` matches a title by its IMDb id (so the website's own fields survive and nothing is duplicated), and keeps the titles the TV could not show instead of deleting them when it saves its list.
+- `build.py` now compares source paths with forward slashes, so it builds on Windows (it reported every file as "not part of the build").
+- Also checked against the live site with a paired TV: Continue Watching (11 items) and Airing Next (10) match the website, and marking a movie watched on the TV shows in the website's Watch History. Unchanged: with a Nuvio account connected, a play removed only on the My Lists side comes back from Nuvio's copy; remove it in both.
