@@ -27,14 +27,14 @@
 // pasted file is live (docs/RELEASES.md). build.py fills in both; nobody
 // raises a number by hand. The date is the day the code last changed (see
 // build_date in build.py).
-const WORKER_BUILD_DATE = "2026-11-26";
+const WORKER_BUILD_DATE = "2026-11-27";
 
 // A fingerprint of the exact sources this file was built from. build.py fills
 // in the placeholder below with the first 10 characters of the SHA-256 of
 // header.js plus the numbered files, so two pasted Workers carry the same
 // value only if they are the same code. /admin shows it beside the build date:
 // after pasting, compare it with what `python build.py` printed.
-const WORKER_BUILD = "fc22585323";
+const WORKER_BUILD = "289ad3cdf5";
 
 // --- Trakt Continue Watching: how many shows get a "next episode" check -------
 //
@@ -26792,7 +26792,9 @@ async function fetchTmdbGenre(entry, skip, apiKey, genreKey, region) {
   const wantKind = entry.type === "series" ? "tv" : "movie";
   const key = String(genreKey || "").toLowerCase().trim();
   const isStreamReleases = key === "stream-releases";
-  const config = TMDB_GENRE_CONFIG[key] || { movie: "", tv: "" };
+  // "studio-<company id>" is a studio's films, for the TV launcher's Studios collection (tmdb-studio-<id>).
+  const studio = /^studio-(\d+)$/.exec(key);
+  const config = studio ? { movie: `with_companies=${studio[1]}`, tv: `with_companies=${studio[1]}` } : (TMDB_GENRE_CONFIG[key] || { movie: "", tv: "" });
   const queryPart = substituteWatchRegion(config[wantKind] || "", region);
   const now = new Date();
   const today = now.toISOString().slice(0, 10);
@@ -32142,6 +32144,13 @@ function findChartOrCollectionEntry(id, type) {
     const match = typeof HOLIDAY_LISTS !== "undefined" ? HOLIDAY_LISTS.find((h) => h.movieUrl === `tmdb:holiday:${hol}`) : null;
     const name = match ? match.name : `Holiday ${hol}`;
     return { id: cleanId, name, type: reqType, url: `tmdb:holiday:${hol}`, enabled: true };
+  }
+  // The TV launcher's Studios and Franchises collections name their lists tmdb-studio-<id> and tmdb-collection-<id>.
+  if (/^tmdb-studio-\d+$/.test(cleanId)) {
+    return { id: cleanId, name: "Studio " + cleanId.replace(/^tmdb-studio-/, ""), type: reqType, url: `tmdb:genre:studio-${cleanId.replace(/^tmdb-studio-/, "")}`, enabled: true };
+  }
+  if (/^tmdb-collection-\d+$/.test(cleanId)) {
+    return { id: cleanId, name: "Collection " + cleanId.replace(/^tmdb-collection-/, ""), type: "movie", url: `tmdb:collection:${cleanId.replace(/^tmdb-collection-/, "")}`, enabled: true };
   }
   if (cleanId.startsWith("tmdb-genre-")) {
     const gen = cleanId.replace(/^tmdb-genre-/, "");

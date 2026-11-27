@@ -1221,7 +1221,9 @@ async function fetchTmdbGenre(entry, skip, apiKey, genreKey, region) {
   const wantKind = entry.type === "series" ? "tv" : "movie";
   const key = String(genreKey || "").toLowerCase().trim();
   const isStreamReleases = key === "stream-releases";
-  const config = TMDB_GENRE_CONFIG[key] || { movie: "", tv: "" };
+  // "studio-<company id>" is a studio's films, for the TV launcher's Studios collection (tmdb-studio-<id>).
+  const studio = /^studio-(\d+)$/.exec(key);
+  const config = studio ? { movie: `with_companies=${studio[1]}`, tv: `with_companies=${studio[1]}` } : (TMDB_GENRE_CONFIG[key] || { movie: "", tv: "" });
   const queryPart = substituteWatchRegion(config[wantKind] || "", region);
   const now = new Date();
   const today = now.toISOString().slice(0, 10);

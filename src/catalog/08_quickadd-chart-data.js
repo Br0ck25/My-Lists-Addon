@@ -1107,6 +1107,13 @@ function findChartOrCollectionEntry(id, type) {
     const name = match ? match.name : `Holiday ${hol}`;
     return { id: cleanId, name, type: reqType, url: `tmdb:holiday:${hol}`, enabled: true };
   }
+  // The TV launcher's Studios and Franchises collections name their lists tmdb-studio-<id> and tmdb-collection-<id>.
+  if (/^tmdb-studio-\d+$/.test(cleanId)) {
+    return { id: cleanId, name: "Studio " + cleanId.replace(/^tmdb-studio-/, ""), type: reqType, url: `tmdb:genre:studio-${cleanId.replace(/^tmdb-studio-/, "")}`, enabled: true };
+  }
+  if (/^tmdb-collection-\d+$/.test(cleanId)) {
+    return { id: cleanId, name: "Collection " + cleanId.replace(/^tmdb-collection-/, ""), type: "movie", url: `tmdb:collection:${cleanId.replace(/^tmdb-collection-/, "")}`, enabled: true };
+  }
   if (cleanId.startsWith("tmdb-genre-")) {
     const gen = cleanId.replace(/^tmdb-genre-/, "");
     const match = typeof GENRE_LISTS !== "undefined" ? GENRE_LISTS.find((g) => g.movieUrl === `tmdb:genre:${gen}`) : null;
