@@ -3494,7 +3494,7 @@ window.markSeasonWatched = async function(seasonNum, btn) {
       return;
     }
 
-    const resBatch = toggleBatchWatchStatus(episodes);
+    const resBatch = toggleBatchWatchStatus(episodes, isSeasonFullyWatched(d.id, seasonNum, ((d.seasonsData || []).find(sd => Number(sd.season_number) === Number(seasonNum)) || {}).episode_count)); // intent = what the button showed, not a guess from TMDB ids
     if (btn) {
       btn.disabled = false;
       // From the write that just happened, not re-derived: this season's

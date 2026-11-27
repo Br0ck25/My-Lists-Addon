@@ -3939,6 +3939,41 @@ describe("client: Mark Show Watched and Unwatched modal button", () => {
     assert.equal(client.call("isShowFullyWatched", showDetails), true);
   });
 
+  it("Mark Season Unwatched removes a season whose history rows carry a different id than TMDB's episode id", async () => {
+    // Plays that arrive from a scrobble or an import are filed as "tt:season:episode",
+    // not under the TMDB episode id the season list returns. The button reads watched
+    // by season and episode number, so the click must unwatch -- not add the
+    // "missing" TMDB ids and leave the season looking watched again.
+    const client = loadClient({
+      routes: {
+        "/api/season": () => ({ json: { ok: true, season: { episodes: [
+          { id: 201, name: "Seven Thirty-Seven", episode_number: 1, air_date: "2009-03-08" },
+          { id: 202, name: "Grilled", episode_number: 2, air_date: "2009-03-15" }
+        ] } } })
+      }
+    });
+    const showDetails = {
+      id: "tt0903747", tmdbId: 1396, title: "Breaking Bad",
+      seasonsData: [{ season_number: 2, episode_count: 2 }]
+    };
+    setupShowModal(client, showDetails);
+    const rows = [1, 2].map((n) => ({
+      id: "tt0903747:2:" + n, type: "episode", name: "Ep " + n,
+      showId: "tt0903747", showTitle: "Breaking Bad", seasonNum: 2, episodeNum: n, watchedAt: 1
+    }));
+    client.call("saveLocalCustomListsMap", { "watch-history": { slug: "watch-history", items: rows } });
+    client.call("rebuildWatchedIndex", rows);
+    assert.equal(client.call("isSeasonFullyWatched", "tt0903747", 2, 2), true, "button reads the season as watched");
+
+    const btnSeason = { disabled: false, textContent: "", innerHTML: "", classList: { remove() {}, add() {} } };
+    await client.call("markSeasonWatched", 2, btnSeason);
+
+    const left = (client.call("loadLocalCustomLists")["watch-history"]?.items || []);
+    assert.equal(left.length, 0, "every episode of the season is removed from Watch History");
+    assert.equal(client.call("isSeasonFullyWatched", "tt0903747", 2, 2), false, "season no longer reads as watched");
+    assert.ok(btnSeason.innerHTML.includes("Mark Season Watched"), "button flips to Mark Season Watched");
+  });
+
   it("markShowWatched synchronously evicts completed show and immediately injects storyline companion into continue-watching", async () => {
     const episodesS1 = [
       { id: 101, name: "Pilot", episode_number: 1, air_date: "2008-01-20" },

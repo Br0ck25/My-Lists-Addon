@@ -34,7 +34,7 @@ const WORKER_BUILD_DATE = "2026-11-27";
 // header.js plus the numbered files, so two pasted Workers carry the same
 // value only if they are the same code. /admin shows it beside the build date:
 // after pasting, compare it with what `python build.py` printed.
-const WORKER_BUILD = "f0484c679d";
+const WORKER_BUILD = "6ea8e1bc48";
 
 // --- Trakt Continue Watching: how many shows get a "next episode" check -------
 //
@@ -56009,7 +56009,7 @@ window.markSeasonWatched = async function(seasonNum, btn) {
       return;
     }
 
-    const resBatch = toggleBatchWatchStatus(episodes);
+    const resBatch = toggleBatchWatchStatus(episodes, isSeasonFullyWatched(d.id, seasonNum, ((d.seasonsData || []).find(sd => Number(sd.season_number) === Number(seasonNum)) || {}).episode_count)); // intent = what the button showed, not a guess from TMDB ids
     if (btn) {
       btn.disabled = false;
       // From the write that just happened, not re-derived: this season's
