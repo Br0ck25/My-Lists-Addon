@@ -8,6 +8,7 @@
 async function handleCreatorApiSyncRoutes(request, env, ctx, url, path) {
   if (path === "/api/creator/sync/save-presets" && request.method === "POST") return creatorApiSyncSavePresets(request, env, ctx, path);
   if (path === "/api/creator/sync/save-channels" && request.method === "POST") return creatorApiSyncSaveChannels(request, env, ctx, path);
+  if (path === "/api/creator/sync/save-collections" && request.method === "POST") return creatorApiSyncSaveCollections(request, env, ctx, path);
   if (path === "/api/creator/sync/meta" && request.method === "POST") return creatorApiSyncMeta(request, env, ctx, path);
   if (path === "/api/creator/sync/load" && request.method === "POST") return creatorApiSyncLoad(request, env, ctx, path);
   if (path === "/api/creator/sync/like" && request.method === "POST") return creatorApiSyncLike(request, env, ctx, path);
@@ -59,10 +60,13 @@ async function creatorApiSyncSavePresets(request, env, ctx, path) {
   }
   const presetsCurrentRaw = await env.CONFIGS.get(`creatorsyncpresets:${auth.username}`);
   let presetsCurrentUpdatedAt = 0;
+  let keptCollections = null;
   if (presetsCurrentRaw) {
     try {
       const cur = JSON.parse(presetsCurrentRaw);
       presetsCurrentUpdatedAt = Number(cur.updatedAt) || 0;
+      // The account's collections live in this same record (see 86_tv-collections-routes.js); a presets save must not drop them.
+      if (Array.isArray(cur.customCollections)) keptCollections = { customCollections: cur.customCollections, customCollectionGroups: Array.isArray(cur.customCollectionGroups) ? cur.customCollectionGroups : [] };
       if (presetsExpected.value !== null && presetsCurrentUpdatedAt > presetsExpected.value) {
         ctx.waitUntil(bumpStat(env, "sync_conflict"));
         return json({ ok: false, error: "conflict", conflict: true, updatedAt: cur.updatedAt }, 409);
@@ -76,6 +80,7 @@ async function creatorApiSyncSavePresets(request, env, ctx, path) {
     presetsB64: body.presetsB64 || null,
     updatedAt: nextSyncVersion(presetsCurrentUpdatedAt),
   };
+  if (keptCollections) Object.assign(presetsBlob, keptCollections);
   const serialized = JSON.stringify(presetsBlob);
   if (serialized.length > 24 * 1024 * 1024) {
     return json({ ok: false, error: "Your saved presets are too large to store (over the 25MB limit) \u2014 likely from several TV Channels with a lot of episodes. Try removing an older preset or a large Channel." });

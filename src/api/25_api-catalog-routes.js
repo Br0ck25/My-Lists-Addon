@@ -452,7 +452,8 @@ async function buildNuvioTvSyncDefaultResponse(url, request) {
   }, versionHash, "public, max-age=300");
 }
 
-function formatNuvioUserCollections(userCollections) {
+// userGroups: the account's collections list (id and name), so the folders come out in the collections they sit in on the website.
+function formatNuvioUserCollections(userCollections, userGroups) {
   if (!Array.isArray(userCollections) || !userCollections.length) {
     return typeof PREMADE_COLLECTIONS !== "undefined" ? PREMADE_COLLECTIONS : [];
   }
@@ -481,22 +482,40 @@ function formatNuvioUserCollections(userCollections) {
       })),
     };
   });
+  // One collection per group the folders sit in. `own: true` marks the account's own, so a launcher can show just those and not
+  // the built-in set that follows them.
+  const stored = Array.isArray(userGroups) ? userGroups.filter((g) => g && g.id) : [];
+  const groups = [];
+  const byId = new Map();
+  const groupFor = (id, name) => {
+    let g = byId.get(id);
+    if (!g) { g = { id, name, folders: [] }; byId.set(id, g); groups.push(g); }
+    return g;
+  };
+  stored.forEach((g) => groupFor(String(g.id), String(g.name || g.title || "My Lists Collections")));
+  userCollections.forEach((col, i) => {
+    const parent = tvCollectionGroupOf(col);
+    groupFor(parent.id, parent.name).folders.push(userFolders[i]);
+  });
+  const own = groups.filter((g) => g.folders.length).map((g) => ({
+    id: g.id,
+    title: g.name,
+    name: g.name,
+    own: true,
+    viewMode: "FOLLOW_LAYOUT",
+    showAllTab: false,
+    pinToTop: false,
+    focusGlowEnabled: true,
+    backdropImageUrl: "/icon.png",
+    hidden: false,
+    isVisible: true,
+    enabled: true,
+    folders: g.folders,
+  }));
+  const ownIds = new Set(own.map((c) => c.id));
   return [
-    {
-      id: "my-lists-collections",
-      title: "My Lists Collections",
-      name: "My Lists Collections",
-      viewMode: "FOLLOW_LAYOUT",
-      showAllTab: false,
-      pinToTop: false,
-      focusGlowEnabled: true,
-      backdropImageUrl: "/icon.png",
-      hidden: false,
-      isVisible: true,
-      enabled: true,
-      folders: userFolders,
-    },
-    ...(typeof PREMADE_COLLECTIONS !== "undefined" ? PREMADE_COLLECTIONS : []),
+    ...own,
+    ...(typeof PREMADE_COLLECTIONS !== "undefined" ? PREMADE_COLLECTIONS : []).filter((c) => !ownIds.has(c.id)),
   ];
 }
 
@@ -731,6 +750,7 @@ async function handleNuvioTvCollectionsRoute(request, env, ctx, url, path) {
   }
 
   let userCollections = null;
+  let userGroups = null;
   if (username && env && env.CONFIGS) {
     try {
       const storedPresets = await env.CONFIGS.get(`creatorsyncpresets:${username}`);
@@ -738,11 +758,12 @@ async function handleNuvioTvCollectionsRoute(request, env, ctx, url, path) {
         const parsedPresets = JSON.parse(storedPresets);
         if (Array.isArray(parsedPresets.customCollections) && parsedPresets.customCollections.length) {
           userCollections = parsedPresets.customCollections;
+          userGroups = parsedPresets.customCollectionGroups;
         }
       }
     } catch {}
   }
-  const formattedCollections = formatNuvioUserCollections(userCollections);
+  const formattedCollections = formatNuvioUserCollections(userCollections, userGroups);
   return jsonPublic({ ok: true, collections: formattedCollections }, 200, {
     ...corsHeaders(),
     "Cache-Control": "public, max-age=300",
@@ -1395,6 +1416,7 @@ async function handleNuvioTvSyncRoute(request, env, ctx, url, path) {
 
   let currentUpdatedAt = updatedAt || 0;
   let userCollections = null;
+  let userGroups = null;
   if (username && env && env.CONFIGS) {
     try {
       const storedPresets = await env.CONFIGS.get(`creatorsyncpresets:${username}`);
@@ -1405,11 +1427,12 @@ async function handleNuvioTvSyncRoute(request, env, ctx, url, path) {
         }
         if (Array.isArray(parsedPresets.customCollections) && parsedPresets.customCollections.length) {
           userCollections = parsedPresets.customCollections;
+          userGroups = parsedPresets.customCollectionGroups;
         }
       }
     } catch {}
   }
-  const formattedCollections = formatNuvioUserCollections(userCollections);
+  const formattedCollections = formatNuvioUserCollections(userCollections, userGroups);
 
   let userChannelsRaw = null;
   if (username && env && env.CONFIGS) {

@@ -90,6 +90,7 @@
   "/api/creator/sync/save": "account",
   "/api/creator/sync/save-channels": "account",
   "/api/creator/sync/save-presets": "account",
+  "/api/creator/sync/save-collections": "account",
   "/api/creator/sync/save-tracking": "account",
   "/api/creator/sync/share-tracking": "account",
   "/api/creator/track-status": "account",

@@ -194,6 +194,7 @@ const CREATOR_POSTS = [
   "/api/creator/sync/save",
   "/api/creator/sync/save-tracking",
   "/api/creator/sync/save-presets",
+  "/api/creator/sync/save-collections",
   "/api/creator/sync/save-channels",
   "/api/creator/sync/meta",
   "/api/creator/sync/load",

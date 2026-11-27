@@ -34,7 +34,7 @@ const WORKER_BUILD_DATE = "2026-11-27";
 // header.js plus the numbered files, so two pasted Workers carry the same
 // value only if they are the same code. /admin shows it beside the build date:
 // after pasting, compare it with what `python build.py` printed.
-const WORKER_BUILD = "289ad3cdf5";
+const WORKER_BUILD = "f0484c679d";
 
 // --- Trakt Continue Watching: how many shows get a "next episode" check -------
 //
@@ -88102,6 +88102,48 @@ async function mediaHistorySeasonEpisodes(tmdbId, season) {
     return list.length ? list : null;
   } catch (e) { return null; }
 }
+// My Lists TV: keep this account's collections on the server too, so the TV launcher can show them (see 86_tv-collections-routes.js).
+// The collections live in this browser; this copies them to the account whenever they change, and once shortly after the page opens.
+
+let tvCollectionsTimer = null;
+let tvCollectionsSent = '';
+
+async function pushTvCollections() {
+  if (window._suppressCreatorSync) return;
+  if (typeof activeCreator === 'undefined' || !activeCreator) return;
+  const creatorKey = localStorage.getItem('myListAddon:creatorKey') || '';
+  if (!creatorKey && !creatorKeyForgotten()) return;
+  // Not before this browser has seen what the account holds, as for every other push.
+  if (typeof creatorSyncGateOpen === 'function' && !creatorSyncGateOpen()) return;
+  let folders = [];
+  let groups = [];
+  try { folders = JSON.parse(localStorage.getItem('myListAddon:customCollections') || '[]'); } catch (e) {}
+  try { groups = JSON.parse(localStorage.getItem('myListAddon:collectionGroups') || '[]'); } catch (e) {}
+  if (!Array.isArray(folders) || !folders.length) return;
+  const body = JSON.stringify({ creatorName: activeCreator.creatorName, creatorKey: creatorKey, customCollections: folders, customCollectionGroups: Array.isArray(groups) ? groups : [] });
+  if (body === tvCollectionsSent) return;
+  try {
+    const res = await creatorApiFetch(ORIGIN + '/api/creator/sync/save-collections', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: body });
+    if (res && res.ok) tvCollectionsSent = body;
+  } catch (e) {}
+}
+window.pushTvCollections = pushTvCollections;
+
+function scheduleTvCollectionsPush(delayMs) {
+  if (tvCollectionsTimer) clearTimeout(tvCollectionsTimer);
+  tvCollectionsTimer = setTimeout(pushTvCollections, delayMs || 2500);
+}
+
+// Every save of the collections (an edit, a new folder, a cover picture) also schedules the copy.
+if (typeof saveCustomCollections === 'function') {
+  const saveCustomCollectionsOriginal = saveCustomCollections;
+  saveCustomCollections = function () {
+    const result = saveCustomCollectionsOriginal.apply(this, arguments);
+    scheduleTvCollectionsPush();
+    return result;
+  };
+}
+scheduleTvCollectionsPush(8000);
 // --- config JSON export/import (backup / restore) --------------------------
 //
 // A plain-text alternative to the install link: the same { entries,
@@ -93442,7 +93484,8 @@ async function buildNuvioTvSyncDefaultResponse(url, request) {
   }, versionHash, "public, max-age=300");
 }
 
-function formatNuvioUserCollections(userCollections) {
+// userGroups: the account's collections list (id and name), so the folders come out in the collections they sit in on the website.
+function formatNuvioUserCollections(userCollections, userGroups) {
   if (!Array.isArray(userCollections) || !userCollections.length) {
     return typeof PREMADE_COLLECTIONS !== "undefined" ? PREMADE_COLLECTIONS : [];
   }
@@ -93471,22 +93514,40 @@ function formatNuvioUserCollections(userCollections) {
       })),
     };
   });
+  // One collection per group the folders sit in. `own: true` marks the account's own, so a launcher can show just those and not
+  // the built-in set that follows them.
+  const stored = Array.isArray(userGroups) ? userGroups.filter((g) => g && g.id) : [];
+  const groups = [];
+  const byId = new Map();
+  const groupFor = (id, name) => {
+    let g = byId.get(id);
+    if (!g) { g = { id, name, folders: [] }; byId.set(id, g); groups.push(g); }
+    return g;
+  };
+  stored.forEach((g) => groupFor(String(g.id), String(g.name || g.title || "My Lists Collections")));
+  userCollections.forEach((col, i) => {
+    const parent = tvCollectionGroupOf(col);
+    groupFor(parent.id, parent.name).folders.push(userFolders[i]);
+  });
+  const own = groups.filter((g) => g.folders.length).map((g) => ({
+    id: g.id,
+    title: g.name,
+    name: g.name,
+    own: true,
+    viewMode: "FOLLOW_LAYOUT",
+    showAllTab: false,
+    pinToTop: false,
+    focusGlowEnabled: true,
+    backdropImageUrl: "/icon.png",
+    hidden: false,
+    isVisible: true,
+    enabled: true,
+    folders: g.folders,
+  }));
+  const ownIds = new Set(own.map((c) => c.id));
   return [
-    {
-      id: "my-lists-collections",
-      title: "My Lists Collections",
-      name: "My Lists Collections",
-      viewMode: "FOLLOW_LAYOUT",
-      showAllTab: false,
-      pinToTop: false,
-      focusGlowEnabled: true,
-      backdropImageUrl: "/icon.png",
-      hidden: false,
-      isVisible: true,
-      enabled: true,
-      folders: userFolders,
-    },
-    ...(typeof PREMADE_COLLECTIONS !== "undefined" ? PREMADE_COLLECTIONS : []),
+    ...own,
+    ...(typeof PREMADE_COLLECTIONS !== "undefined" ? PREMADE_COLLECTIONS : []).filter((c) => !ownIds.has(c.id)),
   ];
 }
 
@@ -93721,6 +93782,7 @@ async function handleNuvioTvCollectionsRoute(request, env, ctx, url, path) {
   }
 
   let userCollections = null;
+  let userGroups = null;
   if (username && env && env.CONFIGS) {
     try {
       const storedPresets = await env.CONFIGS.get(`creatorsyncpresets:${username}`);
@@ -93728,11 +93790,12 @@ async function handleNuvioTvCollectionsRoute(request, env, ctx, url, path) {
         const parsedPresets = JSON.parse(storedPresets);
         if (Array.isArray(parsedPresets.customCollections) && parsedPresets.customCollections.length) {
           userCollections = parsedPresets.customCollections;
+          userGroups = parsedPresets.customCollectionGroups;
         }
       }
     } catch {}
   }
-  const formattedCollections = formatNuvioUserCollections(userCollections);
+  const formattedCollections = formatNuvioUserCollections(userCollections, userGroups);
   return jsonPublic({ ok: true, collections: formattedCollections }, 200, {
     ...corsHeaders(),
     "Cache-Control": "public, max-age=300",
@@ -94385,6 +94448,7 @@ async function handleNuvioTvSyncRoute(request, env, ctx, url, path) {
 
   let currentUpdatedAt = updatedAt || 0;
   let userCollections = null;
+  let userGroups = null;
   if (username && env && env.CONFIGS) {
     try {
       const storedPresets = await env.CONFIGS.get(`creatorsyncpresets:${username}`);
@@ -94395,11 +94459,12 @@ async function handleNuvioTvSyncRoute(request, env, ctx, url, path) {
         }
         if (Array.isArray(parsedPresets.customCollections) && parsedPresets.customCollections.length) {
           userCollections = parsedPresets.customCollections;
+          userGroups = parsedPresets.customCollectionGroups;
         }
       }
     } catch {}
   }
-  const formattedCollections = formatNuvioUserCollections(userCollections);
+  const formattedCollections = formatNuvioUserCollections(userCollections, userGroups);
 
   let userChannelsRaw = null;
   if (username && env && env.CONFIGS) {
@@ -119536,6 +119601,7 @@ async function creatorTrackingWriteWatchlist(env, auth, body, watchlistUpdatedAt
 async function handleCreatorApiSyncRoutes(request, env, ctx, url, path) {
   if (path === "/api/creator/sync/save-presets" && request.method === "POST") return creatorApiSyncSavePresets(request, env, ctx, path);
   if (path === "/api/creator/sync/save-channels" && request.method === "POST") return creatorApiSyncSaveChannels(request, env, ctx, path);
+  if (path === "/api/creator/sync/save-collections" && request.method === "POST") return creatorApiSyncSaveCollections(request, env, ctx, path);
   if (path === "/api/creator/sync/meta" && request.method === "POST") return creatorApiSyncMeta(request, env, ctx, path);
   if (path === "/api/creator/sync/load" && request.method === "POST") return creatorApiSyncLoad(request, env, ctx, path);
   if (path === "/api/creator/sync/like" && request.method === "POST") return creatorApiSyncLike(request, env, ctx, path);
@@ -119587,10 +119653,13 @@ async function creatorApiSyncSavePresets(request, env, ctx, path) {
   }
   const presetsCurrentRaw = await env.CONFIGS.get(`creatorsyncpresets:${auth.username}`);
   let presetsCurrentUpdatedAt = 0;
+  let keptCollections = null;
   if (presetsCurrentRaw) {
     try {
       const cur = JSON.parse(presetsCurrentRaw);
       presetsCurrentUpdatedAt = Number(cur.updatedAt) || 0;
+      // The account's collections live in this same record (see 86_tv-collections-routes.js); a presets save must not drop them.
+      if (Array.isArray(cur.customCollections)) keptCollections = { customCollections: cur.customCollections, customCollectionGroups: Array.isArray(cur.customCollectionGroups) ? cur.customCollectionGroups : [] };
       if (presetsExpected.value !== null && presetsCurrentUpdatedAt > presetsExpected.value) {
         ctx.waitUntil(bumpStat(env, "sync_conflict"));
         return json({ ok: false, error: "conflict", conflict: true, updatedAt: cur.updatedAt }, 409);
@@ -119604,6 +119673,7 @@ async function creatorApiSyncSavePresets(request, env, ctx, path) {
     presetsB64: body.presetsB64 || null,
     updatedAt: nextSyncVersion(presetsCurrentUpdatedAt),
   };
+  if (keptCollections) Object.assign(presetsBlob, keptCollections);
   const serialized = JSON.stringify(presetsBlob);
   if (serialized.length > 24 * 1024 * 1024) {
     return json({ ok: false, error: "Your saved presets are too large to store (over the 25MB limit) \u2014 likely from several TV Channels with a lot of episodes. Try removing an older preset or a large Channel." });
@@ -130855,4 +130925,64 @@ async function handleNuvioTvWatched(env, username) {
     episodes: [...s.eps.values()].sort((a, b) => a[0] - b[0] || a[1] - b[1]).slice(0, TV_WATCHED_MAX_EPISODES).map(([se, ep]) => `${se}:${ep}`),
   }));
   return json({ ok: true, movies: [...movies].slice(0, TV_WATCHED_MAX_MOVIES), shows }, 200, { ...corsHeaders(), "Cache-Control": "no-store" });
+}
+// My Lists TV: the account's own collections, kept on the server so the TV launcher can show them.
+//
+// The website keeps a signed-in account's collections (folders of lists, with a cover picture each) in the browser. Nothing saved them to
+// the server, so the launcher could only ever be handed the built-in set. POST /api/creator/sync/save-collections
+// { creatorName, creatorKey, customCollections, customCollectionGroups } stores them in the account's presets record
+// (`creatorsyncpresets:<user>`), which is where /api/nuvio-tv/collections and /api/creator/sync/load already look for them, and which
+// the account-reset sweep already deletes. It leaves the presets themselves and their version stamp alone.
+
+const TV_COLLECTIONS_MAX_BYTES = 2 * 1024 * 1024;
+
+// The folder's group (the collection it sits in on the Lists > Collections page), by the same rules the page uses.
+function tvCollectionGroupOf(folder) {
+  if (folder.parentCollectionId) {
+    return { id: String(folder.parentCollectionId), name: String(folder.parentCollectionName || "My Lists Collections") };
+  }
+  const premade = typeof PREMADE_COLLECTIONS !== "undefined"
+    ? PREMADE_COLLECTIONS.find((c) => c && c.id === "col_mylists_streaming_services")
+    : null;
+  const inStreaming = folder.id === "col_discovery" || !!(premade && (premade.folders || []).some((f) => f && f.id === folder.id));
+  return inStreaming
+    ? { id: "col_mylists_streaming_services", name: "Streaming Services" }
+    : { id: "my-lists-collections", name: "My Lists Collections" };
+}
+
+async function creatorApiSyncSaveCollections(request, env, ctx, path) {
+  let body;
+  try {
+    body = await readJsonObject(request);
+  } catch {
+    return json({ ok: false, error: "Invalid JSON body." }, 400);
+  }
+  const auth = await authenticateCreatorFor(request, env, ctx, path, body.creatorName, body.creatorKey);
+  if (!auth.ok) return authFailureResponse(auth);
+  if (!Array.isArray(body.customCollections)) {
+    return json({ ok: false, error: "customCollections must be a list." }, 400);
+  }
+  const folders = body.customCollections.filter((f) => f && typeof f === "object" && !Array.isArray(f));
+  const groups = Array.isArray(body.customCollectionGroups)
+    ? body.customCollectionGroups.filter((g) => g && typeof g === "object" && !Array.isArray(g))
+    : [];
+  if (JSON.stringify({ folders, groups }).length > TV_COLLECTIONS_MAX_BYTES) {
+    return json({ ok: false, error: "Your collections are too large to store (over 2MB)." }, 413);
+  }
+  const key = `creatorsyncpresets:${auth.username}`;
+  let record = {};
+  try {
+    const raw = await env.CONFIGS.get(key);
+    if (raw) record = JSON.parse(raw) || {};
+  } catch {
+    record = {};
+  }
+  record.customCollections = folders;
+  record.customCollectionGroups = groups;
+  try {
+    await env.CONFIGS.put(key, JSON.stringify(record));
+  } catch {
+    return json({ ok: false, error: "Could not save to storage right now. Please try again in a moment." }, 500);
+  }
+  return json({ ok: true, folders: folders.length });
 }
