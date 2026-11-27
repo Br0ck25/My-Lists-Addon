@@ -152,7 +152,7 @@ async function installManifest(request, env, ctx, url, m, rawPath) {
 async function bareManifest(request, url, env) {
   const lists = await readDefaultManifestLists(env);
   return jsonPublic(
-    buildManifest(lists, url.origin),
+    withDefaultTvChannels(buildManifest(lists, url.origin), lists),
     200,
     lists.length ? { "Cache-Control": "no-cache, no-store, must-revalidate, max-age=0" } : {}
   );
@@ -186,6 +186,8 @@ async function subtitlesPing(request, env, ctx, path, m) {
 function handleStremioCatalogRoute(request, env, ctx, url, path) {
   let m = path.match(/^(?:\/([^/]+))?(?:\/tv)?\/catalog\/([^/]+)\/(.+)\.json$/);
   if (!m && path.indexOf("/c/") === 0) m = path.slice(2).match(/^(?:\/([^/]+))?(?:\/tv)?\/catalog\/([^/]+)\/(.+)\.json$/);
+  // The bare link's lists as Live TV channels (67_default-manifest-lists.js).
+  if (m && !m[1] && m[2] === "tv" && m[3].split("/")[0] === DEFAULT_TV_CATALOG_ID) return defaultTvCatalogResponse(env, url);
   if (m) return stremioCatalogRow(request, env, ctx, url, m);
   return null;
 }
@@ -465,6 +467,8 @@ async function stremioCatalogRowFetch(env, ctx, { url, config, type, id, skip, s
 // /api/scrobble and /:config/meta/:type/:id.json, at their original place. Returns a Response promise, or null.
 function handleScrobbleAndMetaRoutes(request, env, ctx, url, path) {
   if (path.startsWith("/api/scrobble")) return mediaServerScrobbleRoute(request, env, ctx, url);
+  // /stream/tv/<id>.json on the bare link: the Live TV channels have no stream yet.
+  if (/^\/stream\/tv\/[^/]+\.json$/.test(path)) return defaultTvStreamResponse();
   let m = path.match(/^(?:\/([^/]+))?(?:\/tv)?\/meta\/([^/]+)\/(.+)\.json$/);
   if (m) return stremioMetaItem(env, ctx, url, m);
   return null;
@@ -487,6 +491,9 @@ async function mediaServerScrobbleRoute(request, env, ctx, url) {
 async function stremioMetaItem(env, ctx, url, m) {
   const [, config, metaType, idRaw] = m;
   const id = safeDecodeURIComponent(idRaw);
+
+  // The bare link's Live TV channels (67_default-manifest-lists.js).
+  if (!config && metaType === "tv" && id.startsWith(DEFAULT_TV_PREFIX)) return defaultTvMetaResponse(env, url, id);
 
   // 1. Synthetic meta for Channels
   if (id.startsWith("channel_")) {

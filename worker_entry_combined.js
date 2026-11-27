@@ -34,7 +34,7 @@ const WORKER_BUILD_DATE = "2026-11-27";
 // header.js plus the numbered files, so two pasted Workers carry the same
 // value only if they are the same code. /admin shows it beside the build date:
 // after pasting, compare it with what `python build.py` printed.
-const WORKER_BUILD = "f0484c679d";
+const WORKER_BUILD = "cc4ab12764";
 
 // --- Trakt Continue Watching: how many shows get a "next episode" check -------
 //
@@ -118565,6 +118565,58 @@ async function adminApiDefaultManifestCatalog(request, env, url) {
   if (!authed) return json({ ok: false, error: "Not authorized." }, 401);
   return json({ ok: true, lists: searchAdminQuickAddCatalog(url.searchParams.get("q")) }, 200, { "Cache-Control": "no-store" });
 }
+
+// --- The default link's lists as Live TV channels (experiment) ---------------
+//
+// For apps that look for Stremio's "tv" type (Ether, for one): each saved row is
+// a channel in one tv catalog. Only the bare /manifest.json does this; an install
+// link's manifest is untouched. No channel has a playable stream yet, so the
+// stream answer is an empty list -- the experiment is whether the app lists them.
+const DEFAULT_TV_CATALOG_ID = "tv-channels";
+const DEFAULT_TV_PREFIX = "tvch_";
+
+// One channel per saved row. Two rows with one name (the same list as Movies and
+// as Series) are told apart by a suffix.
+function defaultTvChannels(lists, origin) {
+  const count = {};
+  for (const l of lists) count[l.name] = (count[l.name] || 0) + 1;
+  return lists.map((l) => {
+    const name = count[l.name] > 1 ? `${l.name} (${l.type === "series" ? "Series" : "Movies"})` : l.name;
+    const art = `${origin}/api/channel-poster?name=${encodeURIComponent(name)}`;
+    return { id: DEFAULT_TV_PREFIX + l.id, type: "tv", name, poster: art, posterShape: "landscape", background: art };
+  });
+}
+
+// The bare manifest with the tv type, catalog, metadata and streams added.
+function withDefaultTvChannels(manifest, lists) {
+  if (!lists.length) return manifest;
+  const resources = manifest.resources.map((r) => (r && r.name === "meta"
+    ? { ...r, types: [...r.types, "tv"], idPrefixes: [...r.idPrefixes, DEFAULT_TV_PREFIX] }
+    : r));
+  resources.push({ name: "stream", types: ["tv"], idPrefixes: [DEFAULT_TV_PREFIX] });
+  return {
+    ...manifest,
+    types: [...manifest.types, "tv"],
+    idPrefixes: [...manifest.idPrefixes, DEFAULT_TV_PREFIX],
+    resources,
+    catalogs: [...manifest.catalogs, { type: "tv", id: DEFAULT_TV_CATALOG_ID, name: "Live channels", extra: [{ name: "skip", isRequired: false }] }],
+  };
+}
+
+async function defaultTvCatalogResponse(env, url) {
+  const channels = defaultTvChannels(await readDefaultManifestLists(env), url.origin);
+  return jsonPublic({ metas: channels }, 200, { "Cache-Control": "no-cache, no-store, must-revalidate, max-age=0" });
+}
+
+async function defaultTvMetaResponse(env, url, id) {
+  const channel = defaultTvChannels(await readDefaultManifestLists(env), url.origin).find((c) => c.id === id);
+  return jsonPublic({ meta: channel || null }, 200, { "Cache-Control": "no-cache, no-store, must-revalidate, max-age=0" });
+}
+
+// /stream/tv/<id>.json on the bare link: nothing playable yet.
+function defaultTvStreamResponse() {
+  return jsonPublic({ streams: [] }, 200, { "Cache-Control": "no-cache, no-store, must-revalidate, max-age=0" });
+}
 // Deleting an account deletes the support/feedback threads filed under its
 // username (audit SEC-04, owner decision 2026-11-10): the D1 row and the KV
 // copy. A reset keeps them (detachFeedbackThreadsFromCreator, 03_admin.js, is
@@ -120804,7 +120856,7 @@ async function installManifest(request, env, ctx, url, m, rawPath) {
 async function bareManifest(request, url, env) {
   const lists = await readDefaultManifestLists(env);
   return jsonPublic(
-    buildManifest(lists, url.origin),
+    withDefaultTvChannels(buildManifest(lists, url.origin), lists),
     200,
     lists.length ? { "Cache-Control": "no-cache, no-store, must-revalidate, max-age=0" } : {}
   );
@@ -120838,6 +120890,8 @@ async function subtitlesPing(request, env, ctx, path, m) {
 function handleStremioCatalogRoute(request, env, ctx, url, path) {
   let m = path.match(/^(?:\/([^/]+))?(?:\/tv)?\/catalog\/([^/]+)\/(.+)\.json$/);
   if (!m && path.indexOf("/c/") === 0) m = path.slice(2).match(/^(?:\/([^/]+))?(?:\/tv)?\/catalog\/([^/]+)\/(.+)\.json$/);
+  // The bare link's lists as Live TV channels (67_default-manifest-lists.js).
+  if (m && !m[1] && m[2] === "tv" && m[3].split("/")[0] === DEFAULT_TV_CATALOG_ID) return defaultTvCatalogResponse(env, url);
   if (m) return stremioCatalogRow(request, env, ctx, url, m);
   return null;
 }
@@ -121117,6 +121171,8 @@ async function stremioCatalogRowFetch(env, ctx, { url, config, type, id, skip, s
 // /api/scrobble and /:config/meta/:type/:id.json, at their original place. Returns a Response promise, or null.
 function handleScrobbleAndMetaRoutes(request, env, ctx, url, path) {
   if (path.startsWith("/api/scrobble")) return mediaServerScrobbleRoute(request, env, ctx, url);
+  // /stream/tv/<id>.json on the bare link: the Live TV channels have no stream yet.
+  if (/^\/stream\/tv\/[^/]+\.json$/.test(path)) return defaultTvStreamResponse();
   let m = path.match(/^(?:\/([^/]+))?(?:\/tv)?\/meta\/([^/]+)\/(.+)\.json$/);
   if (m) return stremioMetaItem(env, ctx, url, m);
   return null;
@@ -121139,6 +121195,9 @@ async function mediaServerScrobbleRoute(request, env, ctx, url) {
 async function stremioMetaItem(env, ctx, url, m) {
   const [, config, metaType, idRaw] = m;
   const id = safeDecodeURIComponent(idRaw);
+
+  // The bare link's Live TV channels (67_default-manifest-lists.js).
+  if (!config && metaType === "tv" && id.startsWith(DEFAULT_TV_PREFIX)) return defaultTvMetaResponse(env, url, id);
 
   // 1. Synthetic meta for Channels
   if (id.startsWith("channel_")) {

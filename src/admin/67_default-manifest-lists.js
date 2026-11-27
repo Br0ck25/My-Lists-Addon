@@ -115,3 +115,55 @@ async function adminApiDefaultManifestCatalog(request, env, url) {
   if (!authed) return json({ ok: false, error: "Not authorized." }, 401);
   return json({ ok: true, lists: searchAdminQuickAddCatalog(url.searchParams.get("q")) }, 200, { "Cache-Control": "no-store" });
 }
+
+// --- The default link's lists as Live TV channels (experiment) ---------------
+//
+// For apps that look for Stremio's "tv" type (Ether, for one): each saved row is
+// a channel in one tv catalog. Only the bare /manifest.json does this; an install
+// link's manifest is untouched. No channel has a playable stream yet, so the
+// stream answer is an empty list -- the experiment is whether the app lists them.
+const DEFAULT_TV_CATALOG_ID = "tv-channels";
+const DEFAULT_TV_PREFIX = "tvch_";
+
+// One channel per saved row. Two rows with one name (the same list as Movies and
+// as Series) are told apart by a suffix.
+function defaultTvChannels(lists, origin) {
+  const count = {};
+  for (const l of lists) count[l.name] = (count[l.name] || 0) + 1;
+  return lists.map((l) => {
+    const name = count[l.name] > 1 ? `${l.name} (${l.type === "series" ? "Series" : "Movies"})` : l.name;
+    const art = `${origin}/api/channel-poster?name=${encodeURIComponent(name)}`;
+    return { id: DEFAULT_TV_PREFIX + l.id, type: "tv", name, poster: art, posterShape: "landscape", background: art };
+  });
+}
+
+// The bare manifest with the tv type, catalog, metadata and streams added.
+function withDefaultTvChannels(manifest, lists) {
+  if (!lists.length) return manifest;
+  const resources = manifest.resources.map((r) => (r && r.name === "meta"
+    ? { ...r, types: [...r.types, "tv"], idPrefixes: [...r.idPrefixes, DEFAULT_TV_PREFIX] }
+    : r));
+  resources.push({ name: "stream", types: ["tv"], idPrefixes: [DEFAULT_TV_PREFIX] });
+  return {
+    ...manifest,
+    types: [...manifest.types, "tv"],
+    idPrefixes: [...manifest.idPrefixes, DEFAULT_TV_PREFIX],
+    resources,
+    catalogs: [...manifest.catalogs, { type: "tv", id: DEFAULT_TV_CATALOG_ID, name: "Live channels", extra: [{ name: "skip", isRequired: false }] }],
+  };
+}
+
+async function defaultTvCatalogResponse(env, url) {
+  const channels = defaultTvChannels(await readDefaultManifestLists(env), url.origin);
+  return jsonPublic({ metas: channels }, 200, { "Cache-Control": "no-cache, no-store, must-revalidate, max-age=0" });
+}
+
+async function defaultTvMetaResponse(env, url, id) {
+  const channel = defaultTvChannels(await readDefaultManifestLists(env), url.origin).find((c) => c.id === id);
+  return jsonPublic({ meta: channel || null }, 200, { "Cache-Control": "no-cache, no-store, must-revalidate, max-age=0" });
+}
+
+// /stream/tv/<id>.json on the bare link: nothing playable yet.
+function defaultTvStreamResponse() {
+  return jsonPublic({ streams: [] }, 200, { "Cache-Control": "no-cache, no-store, must-revalidate, max-age=0" });
+}
