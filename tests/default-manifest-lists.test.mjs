@@ -16,8 +16,7 @@ async function adminCookie(env) {
 }
 
 const newEnv = () => makeEnv({ DB: makeD1(), CONFIGS: makeKv(), ADMIN_KEY: KEY, TMDB_API_KEY: "k" });
-// The saved list rows: not the search rows, and not the Live TV catalog the lists are also offered as.
-const curated = (body) => (body.catalogs || []).filter((c) => !/^search_/.test(c.id) && c.type !== "tv");
+const curated = (body) => (body.catalogs || []).filter((c) => !/^search_/.test(c.id));
 
 const LISTS = [
   { name: "Popular Movies", type: "movie", url: "tmdb:chart:popular" },
@@ -166,80 +165,5 @@ describe("default manifest: searching Quick Add and Discover", () => {
     } finally {
       globalThis.fetch = realFetch;
     }
-  });
-});
-
-// Experiment: the default link also offers its lists as Live TV channels (Stremio
-// type "tv"), for apps like Ether that look for them. Only the default link does;
-// no channel has a playable stream yet, so /stream answers with none.
-describe("default manifest: lists as Live TV channels", () => {
-  const TV_LISTS = [
-    { name: "Popular", type: "movie", url: "tmdb:chart:popular" },
-    { name: "Popular", type: "series", url: "tmdb:chart:popular" },
-    { name: "Horror", type: "movie", url: "tmdb:genre:horror" },
-  ];
-  async function saved() {
-    const env = newEnv();
-    const cookie = await adminCookie(env);
-    await call(env, "/admin/api/default-manifest", { method: "POST", cookie, json: { lists: TV_LISTS } });
-    return env;
-  }
-
-  it("declares nothing about Live TV until lists are saved", async () => {
-    const m = (await call(newEnv(), "/manifest.json")).body;
-    assert.ok(!m.types.includes("tv"));
-    assert.ok(!m.catalogs.some((c) => c.type === "tv"));
-    assert.ok(!m.resources.some((r) => r && r.name === "stream"));
-  });
-
-  it("declares a tv catalog, tv metadata and tv streams once lists are saved", async () => {
-    const m = (await call(await saved(), "/manifest.json")).body;
-    assert.ok(m.types.includes("tv"));
-    const tv = m.catalogs.filter((c) => c.type === "tv");
-    assert.equal(tv.length, 1);
-    assert.equal(tv[0].id, "tv-channels");
-    const stream = m.resources.find((r) => r && r.name === "stream");
-    assert.deepEqual(stream.types, ["tv"]);
-    const meta = m.resources.find((r) => r && r.name === "meta");
-    assert.ok(meta.types.includes("tv") && meta.types.includes("movie"), "titles still get their metadata");
-    assert.ok(meta.idPrefixes.includes("tvch_") && meta.idPrefixes.includes("tt"));
-    assert.ok(m.idPrefixes.includes("tvch_"));
-  });
-
-  it("the tv catalog lists one channel per saved row, and tells two with one name apart", async () => {
-    const r = await call(await saved(), "/catalog/tv/tv-channels.json");
-    assert.equal(r.status, 200, r.text);
-    assert.deepEqual(r.body.metas.map((c) => c.name), ["Popular (Movies)", "Popular (Series)", "Horror"]);
-    for (const c of r.body.metas) {
-      assert.equal(c.type, "tv");
-      assert.ok(c.id.startsWith("tvch_") && !/[\/\s]/.test(c.id));
-      assert.ok(c.poster);
-    }
-  });
-
-  it("a channel has metadata, and an unknown channel has none", async () => {
-    const env = await saved();
-    const first = (await call(env, "/catalog/tv/tv-channels.json")).body.metas[0];
-    const meta = await call(env, `/meta/tv/${first.id}.json`);
-    assert.equal(meta.body.meta.id, first.id);
-    assert.equal(meta.body.meta.type, "tv");
-    assert.equal(meta.body.meta.name, first.name);
-    assert.equal((await call(env, "/meta/tv/tvch_nope.json")).body.meta, null);
-  });
-
-  it("a channel's stream answer is an empty list for now", async () => {
-    const env = await saved();
-    const first = (await call(env, "/catalog/tv/tv-channels.json")).body.metas[0];
-    const r = await call(env, `/stream/tv/${first.id}.json`);
-    assert.equal(r.status, 200, r.text);
-    assert.deepEqual(r.body.streams, []);
-  });
-
-  it("an install link's own manifest is not changed", async () => {
-    const env = await saved();
-    const m = (await call(env, "/nuvio-default/manifest.json")).body;
-    assert.ok(!m.types.includes("tv"));
-    assert.ok(!m.catalogs.some((c) => c.type === "tv"));
-    assert.equal((await call(env, "/nuvio-default/catalog/tv/tv-channels.json")).body.metas.length, 0);
   });
 });
